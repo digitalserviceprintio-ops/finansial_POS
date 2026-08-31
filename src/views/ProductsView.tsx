@@ -15,6 +15,7 @@ import {
   Boxes,
   Bell,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Product, ProductCategory } from '../types';
@@ -28,7 +29,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   onOpenAddModal,
   onOpenEditModal,
 }) => {
-  const { products, categories: appCategories, deleteProduct, restockProduct, formatCurrency, setCurrentTab, showToast } = useApp();
+  const {
+    products,
+    categories: appCategories,
+    deleteProduct,
+    restockProduct,
+    formatCurrency,
+    setCurrentTab,
+    showToast,
+  } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');

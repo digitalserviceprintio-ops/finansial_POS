@@ -1,38 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Menu,
   Search,
   Bell,
-  HelpCircle,
-  Smartphone,
-  Monitor,
   ChevronDown,
   Store,
   LogOut,
   UserCheck,
   CheckCircle2,
   AlertTriangle,
-  Info,
   HardDrive,
   Mail,
-  Inbox,
   Bluetooth,
-  Printer,
+  Package,
+  ArrowRight,
+  CheckCheck,
+  Trash2,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DigitalClockAndCalendar } from './DigitalClockAndCalendar';
-import {
-  bluetoothPrinter,
-  BluetoothPrinterState,
-} from '../utils/bluetoothPrinter';
 import { BluetoothPrinterModal } from './modals/BluetoothPrinterModal';
+import { InAppNotification } from '../types';
 
 export const TopHeader: React.FC = () => {
   const {
     isSidebarOpen,
     setIsSidebarOpen,
-    isMobileSimulation,
-    setIsMobileSimulation,
     searchGlobalQuery,
     setSearchGlobalQuery,
     storeProfile,
@@ -44,31 +39,41 @@ export const TopHeader: React.FC = () => {
     latestSimulatedEmail,
     setIsEmailModalOpen,
     logoutUser,
+    notifications,
+    unreadNotificationCount,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    clearNotifications,
+    deleteNotification,
   } = useApp();
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifFilter, setNotifFilter] = useState<'all' | 'stock' | 'system'>('all');
   const [isBtModalOpen, setIsBtModalOpen] = useState(false);
-  const [btState, setBtState] = useState<BluetoothPrinterState>(
-    bluetoothPrinter.getState()
-  );
 
-  useEffect(() => {
-    const unsubscribe = bluetoothPrinter.subscribe((state) => {
-      setBtState(state);
-    });
-    return () => unsubscribe();
-  }, []);
+  // Filtered notifications
+  const filteredNotifs = notifications.filter((n) => {
+    if (notifFilter === 'stock') return n.type === 'stock_low' || n.type === 'stock_empty';
+    if (notifFilter === 'system') return n.type !== 'stock_low' && n.type !== 'stock_empty';
+    return true;
+  });
 
-  // Notifications based on actual state
   const lowStockCount = products.filter((p) => p.stock <= (p.minStockAlert ?? 5)).length;
-  const recentSalesCount = transactions.length;
+
+  const handleNotificationClick = (notif: InAppNotification) => {
+    markNotificationAsRead(notif.id);
+    if (notif.actionTab) {
+      setCurrentTab(notif.actionTab);
+    }
+    setShowNotifications(false);
+  };
 
   return (
     <>
-      <header id="top-header" className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#e2e1ec] bg-white px-4 md:px-6 shadow-xs">
+      <header id="top-header" className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#e2e1ec] bg-white px-3 sm:px-4 md:px-6 shadow-xs">
         {/* Left section: Toggle & Brand */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           <button
             id="toggle-sidebar-btn"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -79,7 +84,7 @@ export const TopHeader: React.FC = () => {
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-[#4648d4] to-[#797bff] text-white shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-[#4648d4] to-[#797bff] text-white shadow-sm shrink-0">
               <Store className="h-5 w-5" />
             </div>
             <div className="hidden sm:block">
@@ -87,13 +92,15 @@ export const TopHeader: React.FC = () => {
                 <span className="font-bold tracking-tight text-[#1b1b23] text-base leading-none">FinansialPro</span>
                 <span className="rounded bg-[#ebeaff] px-1.5 py-0.5 text-[10px] font-semibold text-[#4648d4]">UMKM</span>
               </div>
-              <p className="text-[11px] text-[#767680] font-medium leading-tight mt-0.5">{storeProfile.branch || storeProfile.name}</p>
+              <p className="text-[11px] text-[#767680] font-medium leading-tight mt-0.5 truncate max-w-[140px] md:max-w-[200px]">
+                {storeProfile.branch || storeProfile.name}
+              </p>
             </div>
           </div>
         </div>
 
         {/* Center section: Search Bar */}
-        <div className="flex-1 max-w-md mx-4 hidden md:block">
+        <div className="flex-1 max-w-md mx-3 hidden lg:block">
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
             <input
@@ -116,34 +123,15 @@ export const TopHeader: React.FC = () => {
         </div>
 
         {/* Right section: Controls, Notifications & Profile */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           {/* Real-time Digital Clock & Interactive Calendar */}
           <DigitalClockAndCalendar />
-
-          {/* Bluetooth Printer Status Indicator Button */}
-          <button
-            onClick={() => setIsBtModalOpen(true)}
-            className={`hidden sm:flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-bold transition-all shadow-2xs ${
-              btState.isConnected
-                ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
-                : 'bg-[#fcf8ff] border-[#e2e1ec] text-[#767680] hover:bg-[#f3f2fa] hover:text-[#1b1b23]'
-            }`}
-            title="Pengaturan Printer Bluetooth Thermal"
-          >
-            <Bluetooth className={`h-3.5 w-3.5 ${btState.isConnected ? 'text-blue-600' : 'text-[#767680]'}`} />
-            <span className="hidden xl:inline">
-              {btState.isConnected ? (btState.deviceName || 'Thermal BT') : 'Printer BT'}
-            </span>
-            {btState.isConnected && (
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            )}
-          </button>
 
           {/* Live Email Inbox Shortcut if an OTP was sent */}
           {latestSimulatedEmail && (
             <button
               onClick={() => setIsEmailModalOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 rounded-xl bg-purple-50 border border-purple-200 px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all shadow-2xs"
+              className="hidden sm:flex items-center gap-1.5 rounded-xl bg-purple-50 border border-purple-200 px-2.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all shadow-2xs"
               title="Lihat Email OTP Masuk"
             >
               <Mail className="h-3.5 w-3.5" />
@@ -152,43 +140,13 @@ export const TopHeader: React.FC = () => {
             </button>
           )}
 
-          {/* Device Switcher (Desktop / Mobile Mode Preview) */}
-          <div className="hidden sm:flex items-center rounded-lg bg-[#f3f2fa] p-0.5 border border-[#e2e1ec]">
-            <button
-              id="switch-desktop-btn"
-              onClick={() => setIsMobileSimulation(false)}
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
-                !isMobileSimulation
-                  ? 'bg-white text-[#4648d4] shadow-xs font-semibold'
-                  : 'text-[#767680] hover:text-[#1b1b23]'
-              }`}
-              title="Tampilan Desktop / POS Tablet"
-            >
-              <Monitor className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Desktop</span>
-            </button>
-            <button
-              id="switch-mobile-btn"
-              onClick={() => setIsMobileSimulation(true)}
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
-                isMobileSimulation
-                  ? 'bg-white text-[#4648d4] shadow-xs font-semibold'
-                  : 'text-[#767680] hover:text-[#1b1b23]'
-              }`}
-              title="Simulasi Tampilan Ponsel Kasir"
-            >
-              <Smartphone className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Mobile</span>
-            </button>
-          </div>
-
           {/* Cashier Shift Status Chip */}
           <div className="hidden xl:flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 border border-emerald-200 text-xs font-medium text-emerald-800">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>Kasir: <strong className="font-semibold">{cashierName}</strong></span>
           </div>
 
-          {/* Notifications Popover */}
+          {/* In-App Notifications Center Popover */}
           <div className="relative">
             <button
               id="notification-bell-btn"
@@ -196,50 +154,202 @@ export const TopHeader: React.FC = () => {
                 setShowNotifications(!showNotifications);
                 setShowProfileMenu(false);
               }}
-              className="relative rounded-lg p-2 text-[#46464f] hover:bg-[#f3f2fa] transition-colors"
-              title="Notifikasi"
+              className="relative rounded-lg p-2 text-[#46464f] hover:bg-[#f3f2fa] transition-colors focus:outline-none"
+              title="Pusat Notifikasi Stok & Sistem"
             >
               <Bell className="h-5 w-5" />
-              {lowStockCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ba1a1a] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ba1a1a]"></span>
+              {unreadNotificationCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-[10px] font-black text-white shadow-xs animate-pulse">
+                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
                 </span>
               )}
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-[#e2e1ec] bg-white p-3 shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                <div className="flex items-center justify-between border-b border-[#f3f2fa] pb-2 px-1">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#767680]">Pemberitahuan</h4>
-                  <span className="rounded-full bg-[#ebeaff] px-2 py-0.5 text-[11px] font-semibold text-[#4648d4]">
-                    {lowStockCount > 0 ? 'Perlu Perhatian' : 'Semua Beres'}
-                  </span>
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* Header */}
+                <div className="p-3.5 bg-gradient-to-r from-slate-50 to-indigo-50/40 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                      <Bell className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 tracking-tight">Notifikasi Sistem</h4>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        {unreadNotificationCount > 0 ? `${unreadNotificationCount} belum dibaca` : 'Semua tersinkron'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-1">
+                    {unreadNotificationCount > 0 && (
+                      <button
+                        onClick={markAllNotificationsAsRead}
+                        className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors flex items-center gap-1"
+                        title="Tandai semua dibaca"
+                      >
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Tandai Dibaca</span>
+                      </button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={clearNotifications}
+                        className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-md transition-colors"
+                        title="Bersihkan daftar notifikasi"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="divide-y divide-[#f3f2fa] max-h-64 overflow-y-auto mt-2">
-                  {lowStockCount > 0 && (
-                    <div className="flex items-start gap-2.5 p-2 hover:bg-[#fcf8ff] rounded-lg transition-colors cursor-pointer" onClick={() => { setCurrentTab('products'); setShowNotifications(false); }}>
-                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold text-[#1b1b23]">Stok Menipis ({lowStockCount} Produk)</p>
-                        <p className="text-[11px] text-[#767680]">Segera lakukan restok untuk menghindari pesanan tertunda.</p>
+
+                {/* Filter Tabs */}
+                <div className="flex items-center gap-1 px-3 pt-2 pb-1.5 bg-white border-b border-slate-100 text-[11px] font-medium text-slate-600">
+                  <button
+                    onClick={() => setNotifFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${
+                      notifFilter === 'all'
+                        ? 'bg-slate-900 text-white font-semibold shadow-xs'
+                        : 'hover:bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    Semua ({notifications.length})
+                  </button>
+                  <button
+                    onClick={() => setNotifFilter('stock')}
+                    className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all ${
+                      notifFilter === 'stock'
+                        ? 'bg-rose-600 text-white font-semibold shadow-xs'
+                        : 'hover:bg-rose-50 text-rose-700'
+                    }`}
+                  >
+                    <AlertTriangle className="h-3 w-3" />
+                    Stok ({lowStockCount})
+                  </button>
+                  <button
+                    onClick={() => setNotifFilter('system')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${
+                      notifFilter === 'system'
+                        ? 'bg-indigo-600 text-white font-semibold shadow-xs'
+                        : 'hover:bg-indigo-50 text-indigo-700'
+                    }`}
+                  >
+                    Sistem
+                  </button>
+                </div>
+
+                {/* Notifications List */}
+                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto bg-slate-50/30">
+                  {filteredNotifs.length === 0 ? (
+                    <div className="py-10 px-4 text-center">
+                      <div className="h-10 w-10 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2">
+                        <CheckCircle2 className="h-5 w-5" />
                       </div>
+                      <p className="text-xs font-bold text-slate-800">Tidak Ada Peringatan Stok</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Semua persediaan produk aman di atas batas minimum.
+                      </p>
                     </div>
+                  ) : (
+                    filteredNotifs.map((notif) => {
+                      const isStockAlert = notif.type === 'stock_low' || notif.type === 'stock_empty';
+                      const isEmpty = notif.type === 'stock_empty';
+
+                      return (
+                        <div
+                          key={notif.id}
+                          className={`p-3 transition-colors hover:bg-white flex items-start gap-3 relative group ${
+                            !notif.isRead ? 'bg-indigo-50/30 font-medium' : 'bg-white'
+                          }`}
+                        >
+                          {/* Unread indicator dot */}
+                          {!notif.isRead && (
+                            <span className="absolute top-3.5 right-3 h-2 w-2 rounded-full bg-indigo-600 ring-2 ring-white"></span>
+                          )}
+
+                          {/* Icon Badge */}
+                          <div
+                            className={`h-8 w-8 rounded-xl shrink-0 flex items-center justify-center shadow-2xs mt-0.5 ${
+                              isEmpty
+                                ? 'bg-rose-100 text-rose-700'
+                                : isStockAlert
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-indigo-100 text-indigo-700'
+                            }`}
+                          >
+                            {isEmpty ? (
+                              <AlertTriangle className="h-4 w-4 text-rose-600" />
+                            ) : isStockAlert ? (
+                              <Package className="h-4 w-4 text-amber-600" />
+                            ) : (
+                              <Sparkles className="h-4 w-4 text-indigo-600" />
+                            )}
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0 pr-4">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span
+                                className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wide ${
+                                  isEmpty
+                                    ? 'bg-rose-600 text-white'
+                                    : isStockAlert
+                                    ? 'bg-amber-500 text-white'
+                                    : 'bg-indigo-600 text-white'
+                                }`}
+                              >
+                                {isEmpty ? 'STOK HABIS' : isStockAlert ? 'MENIPIS' : 'INFO'}
+                              </span>
+                              <h5 className="text-xs font-bold text-slate-900 truncate">
+                                {notif.title}
+                              </h5>
+                            </div>
+
+                            <p className="text-[11px] text-slate-600 leading-relaxed mb-2">
+                              {notif.message}
+                            </p>
+
+                            {/* Action Row */}
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {new Date(notif.timestamp).toLocaleTimeString('id-ID', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })} WIB
+                              </span>
+
+                              {isStockAlert && (
+                                <button
+                                  onClick={() => handleNotificationClick(notif)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-md transition-all shadow-2xs"
+                                >
+                                  <span>Restok di Produk</span>
+                                  <ArrowRight className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
-                  <div className="flex items-start gap-2.5 p-2 hover:bg-[#fcf8ff] rounded-lg transition-colors cursor-pointer" onClick={() => { setCurrentTab('reports'); setShowNotifications(false); }}>
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-semibold text-[#1b1b23]">Arus Kas Sinkron</p>
-                      <p className="text-[11px] text-[#767680]">{recentSalesCount} transaksi berhasil tercatat hari ini.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2.5 p-2 hover:bg-[#fcf8ff] rounded-lg transition-colors cursor-pointer" onClick={() => { setCurrentTab('backup'); setShowNotifications(false); }}>
-                    <HardDrive className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-semibold text-[#1b1b23]">Cadangan JSON Siap</p>
-                      <p className="text-[11px] text-[#767680]">Ekspor data pembukuan & master produk kapan saja.</p>
-                    </div>
-                  </div>
+                </div>
+
+                {/* Footer Quick Action */}
+                <div className="p-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                  <button
+                    onClick={() => {
+                      setCurrentTab('products');
+                      setShowNotifications(false);
+                    }}
+                    className="text-xs font-bold text-slate-700 hover:text-indigo-600 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                  >
+                    <Package className="h-3.5 w-3.5 text-indigo-600" />
+                    <span>Kelola Master Produk</span>
+                  </button>
+                  <span className="text-[10px] text-slate-400">FinansialPro POS UMKM</span>
                 </div>
               </div>
             )}
@@ -253,7 +363,7 @@ export const TopHeader: React.FC = () => {
                 setShowProfileMenu(!showProfileMenu);
                 setShowNotifications(false);
               }}
-              className="flex items-center gap-2 rounded-full p-1 pl-2 pr-1.5 hover:bg-[#f3f2fa] border border-[#e2e1ec] transition-all"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-full p-1 pl-1.5 sm:pl-2 pr-1.5 hover:bg-[#f3f2fa] border border-[#e2e1ec] transition-all"
             >
               <div className="hidden md:flex flex-col text-right">
                 <span className="text-xs font-bold text-[#1b1b23] leading-none">{currentUser?.fullName || storeProfile.owner}</span>
@@ -331,7 +441,7 @@ export const TopHeader: React.FC = () => {
         </div>
       </header>
 
-      {/* Global Bluetooth Printer Modal from Header */}
+      {/* Global Bluetooth Printer Modal */}
       <BluetoothPrinterModal
         isOpen={isBtModalOpen}
         onClose={() => setIsBtModalOpen(false)}

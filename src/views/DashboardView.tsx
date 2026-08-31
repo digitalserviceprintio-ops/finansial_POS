@@ -376,13 +376,21 @@ export const DashboardView: React.FC = () => {
             <h3 className="text-sm font-bold text-[#1b1b23]">Transaksi Kasir Terakhir</h3>
             <p className="text-xs text-[#767680]">Riwayat penjualan langsung dan struk tercetak</p>
           </div>
-          <button
-            onClick={() => setCurrentTab('pos')}
-            className="flex items-center gap-1.5 rounded-xl bg-[#ebeaff] px-3 py-1.5 text-xs font-bold text-[#4648d4] hover:bg-[#4648d4] hover:text-white transition-all w-fit"
-          >
-            <PlusCircle className="h-3.5 w-3.5" />
-            <span>Transaksi Baru</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentTab('transactions')}
+              className="flex items-center gap-1.5 rounded-xl border border-[#e2e1ec] bg-white px-3 py-1.5 text-xs font-bold text-[#4648d4] hover:bg-[#ebeaff] transition-all w-fit"
+            >
+              <span>Semua Riwayat</span>
+            </button>
+            <button
+              onClick={() => setCurrentTab('pos')}
+              className="flex items-center gap-1.5 rounded-xl bg-[#ebeaff] px-3 py-1.5 text-xs font-bold text-[#4648d4] hover:bg-[#4648d4] hover:text-white transition-all w-fit"
+            >
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span>Transaksi Baru</span>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">

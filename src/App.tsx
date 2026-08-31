@@ -8,14 +8,17 @@ import { ToastContainer } from './components/ToastContainer';
 // Views
 import { DashboardView } from './views/DashboardView';
 import { POSView } from './views/POSView';
+import { TransactionsView } from './views/TransactionsView';
 import { ProductsView } from './views/ProductsView';
 import { CategoriesView } from './views/CategoriesView';
 import { CashflowView } from './views/CashflowView';
 import { FinanceReportView } from './views/FinanceReportView';
+import { CustomersView } from './views/CustomersView';
 import { AboutView } from './views/AboutView';
 import { SettingsView } from './views/SettingsView';
 import { BackupView } from './views/BackupView';
 import { AuthView } from './views/AuthView';
+import { SuperAdminView } from './views/SuperAdminView';
 
 // Modals
 import { PaymentModal } from './components/modals/PaymentModal';
@@ -23,15 +26,64 @@ import { ReceiptModal } from './components/modals/ReceiptModal';
 import { AddProductModal } from './components/modals/AddProductModal';
 import { AddExpenseModal } from './components/modals/AddExpenseModal';
 import { EmailInboxSimulationModal } from './components/modals/EmailInboxSimulationModal';
+import { LicenseExpirationAlert } from './components/LicenseExpirationAlert';
 import { Product } from './types';
 
 const MainAppContent: React.FC = () => {
-  const { currentTab, isMobileSimulation, currentUser } = useApp();
+  const {
+    currentTab,
+    isMobileSimulation,
+    currentUser,
+    isSuperAdminOpen,
+    setIsSuperAdminOpen,
+    currentLicense,
+  } = useApp();
 
   // Modals state
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+
+  // Secret shortcut for Super Admin (Ctrl+Shift+S or Cmd+Shift+S or hash #superadmin)
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'S' || e.key === 's' || e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        setIsSuperAdminOpen(true);
+        window.location.hash = '#superadmin';
+      }
+    };
+
+    const handleHashChange = () => {
+      if (window.location.hash === '#superadmin') {
+        setIsSuperAdminOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [setIsSuperAdminOpen]);
+
+  // If Super Admin portal is triggered, show dedicated Super Admin Suite
+  if (isSuperAdminOpen) {
+    return (
+      <div className="min-h-screen bg-[#0f0f14] p-3 sm:p-6 md:p-8 text-[#e2e1ec]">
+        <div className="max-w-7xl mx-auto">
+          <SuperAdminView
+            onExitSuperAdmin={() => {
+              setIsSuperAdminOpen(false);
+              window.location.hash = '';
+            }}
+          />
+        </div>
+        <ToastContainer />
+      </div>
+    );
+  }
 
   // If user is not logged in or in login tab, show full Auth gateway
   if (!currentUser || currentTab === 'login') {
@@ -60,6 +112,8 @@ const MainAppContent: React.FC = () => {
         return <DashboardView />;
       case 'pos':
         return <POSView />;
+      case 'transactions':
+        return <TransactionsView />;
       case 'products':
         return (
           <ProductsView
@@ -74,6 +128,8 @@ const MainAppContent: React.FC = () => {
             onOpenEditProductModal={handleOpenEditProduct}
           />
         );
+      case 'customers':
+        return <CustomersView />;
       case 'cashflow':
         return <CashflowView onOpenAddExpenseModal={() => setIsAddExpenseOpen(true)} />;
       case 'reports':
@@ -94,37 +150,17 @@ const MainAppContent: React.FC = () => {
       {/* Top Header */}
       <TopHeader />
 
-      {/* Main Workspace Frame */}
-      {isMobileSimulation ? (
-        // Mobile Simulator Frame Mode
-        <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-[#f0eff8]">
-          <div className="relative w-full max-w-[420px] h-[850px] max-h-[92vh] rounded-[42px] border-[10px] border-[#1b1b23] bg-[#fcf8ff] shadow-2xl overflow-hidden flex flex-col">
-            {/* Phone Notch / Dynamic Island */}
-            <div className="h-6 w-full bg-[#1b1b23] flex items-center justify-center">
-              <div className="h-3.5 w-24 rounded-full bg-[#35353f]"></div>
-            </div>
+      {/* Main Workspace Frame - Responsive Layout */}
+      <div className="flex flex-1 overflow-hidden relative">
+        <Sidebar />
 
-            {/* Simulated Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
-              {renderActiveView()}
-            </div>
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-24 lg:pb-8 max-w-7xl mx-auto w-full">
+          <LicenseExpirationAlert />
+          {renderActiveView()}
+        </main>
 
-            {/* Phone Bottom Navigation */}
-            <BottomNav />
-          </div>
-        </div>
-      ) : (
-        // Desktop Standard Layout
-        <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
-
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-            {renderActiveView()}
-          </main>
-
-          <BottomNav />
-        </div>
-      )}
+        <BottomNav />
+      </div>
 
       {/* Global Modals */}
       <PaymentModal />

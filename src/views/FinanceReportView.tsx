@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ReportSubTab } from '../types';
+import { ExportAccountingModal } from '../components/modals/ExportAccountingModal';
+import { AccountingReportType } from '../utils/accountingExport';
 
 interface FinanceReportViewProps {
   onOpenAddExpenseModal: () => void;
@@ -37,6 +39,7 @@ export const FinanceReportView: React.FC<FinanceReportViewProps> = ({ onOpenAddE
   } = useApp();
 
   const [datePeriod, setDatePeriod] = useState<'Bulan Ini' | 'Bulan Lalu' | 'Tahun Ini'>('Bulan Ini');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Calculations for Arus Kas & P&L
   const completedTrx = transactions.filter((t) => t.status === 'Selesai');
@@ -83,38 +86,10 @@ export const FinanceReportView: React.FC<FinanceReportViewProps> = ({ onOpenAddE
     };
   });
 
-  const handleExportCSV = () => {
-    let csvContent = 'data:text/csv;charset=utf-8,';
-    if (reportSubTab === 'cashflow') {
-      csvContent += 'No,Tanggal,Tipe,Deskripsi/No Pesanan,Kategori,Jumlah (Rp)\n';
-      transactions.forEach((t, i) => {
-        csvContent += `${i + 1},"${t.date} ${t.time}",Kas Masuk,"${t.orderNumber} - ${t.customer?.name || 'Umum'}","Penjualan Kasir",${t.total}\n`;
-      });
-      expenses.forEach((e, i) => {
-        csvContent += `${transactions.length + i + 1},"${e.date} ${e.time}",Kas Keluar,"${e.description}","${e.category}",-${e.amount}\n`;
-      });
-    } else if (reportSubTab === 'profit_loss') {
-      csvContent += 'Komponen Laporan,Nominal (Rp),Persentase (%)\n';
-      csvContent += `Pendapatan Penjualan,${totalRevenue},100%\n`;
-      csvContent += `Harga Pokok Penjualan (HPP),${totalHPP},${Math.round((totalHPP / (totalRevenue || 1)) * 100)}%\n`;
-      csvContent += `Laba Kotor,${grossProfit},${Math.round((grossProfit / (totalRevenue || 1)) * 100)}%\n`;
-      csvContent += `Total Beban Operasional,${totalCashOut},${Math.round((totalCashOut / (totalRevenue || 1)) * 100)}%\n`;
-      csvContent += `Laba Bersih,${netProfit},${netMarginPercent}%\n`;
-    } else {
-      csvContent += 'Peringkat,Nama Produk,SKU,Kategori,Harga Jual,Unit Terjual,Total Omset (Rp)\n';
-      products.forEach((p, i) => {
-        csvContent += `${i + 1},"${p.name}","${p.sku}","${p.category}",${p.sellingPrice},${p.soldCount || 0},${(p.soldCount || 0) * p.sellingPrice}\n`;
-      });
-    }
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Laporan_FinansialPro_${reportSubTab}_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Laporan berhasil diunduh dalam format CSV', 'success');
+  const getAccountingTypeForSubTab = (): AccountingReportType => {
+    if (reportSubTab === 'cashflow') return 'cashflow_ledger';
+    if (reportSubTab === 'profit_loss') return 'profit_loss';
+    return 'product_sales';
   };
 
   return (
@@ -134,11 +109,12 @@ export const FinanceReportView: React.FC<FinanceReportViewProps> = ({ onOpenAddE
           {/* Export button */}
           <button
             id="export-report-btn"
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-3.5 py-2 text-xs font-bold text-[#46464f] hover:border-[#4648d4] hover:text-[#4648d4] transition-all shadow-xs"
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-3.5 py-2 text-xs font-bold text-[#4648d4] hover:bg-[#ebeaff] hover:border-[#4648d4] transition-all shadow-xs"
+            title="Ekspor Laporan Keuangan & Akuntansi (CSV / Excel Rapi)"
           >
-            <Download className="h-3.5 w-3.5" />
-            <span>Ekspor CSV</span>
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span>Ekspor CSV / Excel Akuntansi</span>
           </button>
 
           {/* Record Expense Button */}
@@ -524,6 +500,13 @@ export const FinanceReportView: React.FC<FinanceReportViewProps> = ({ onOpenAddE
           </div>
         </div>
       )}
+
+      {/* Accounting CSV & Excel Export Modal */}
+      <ExportAccountingModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        defaultReportType={getAccountingTypeForSubTab()}
+      />
     </div>
   );
 };

@@ -12,8 +12,10 @@ import {
   Download,
   Trash2,
   Receipt,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { ExportAccountingModal } from '../components/modals/ExportAccountingModal';
 
 interface CashflowViewProps {
   onOpenAddExpenseModal: () => void;
@@ -32,6 +34,7 @@ export const CashflowView: React.FC<CashflowViewProps> = ({ onOpenAddExpenseModa
 
   const [filterType, setFilterType] = useState<'all' | 'in' | 'out'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Cash In calculation
   const completedTrx = transactions.filter((t) => t.status === 'Selesai');
@@ -91,7 +94,16 @@ export const CashflowView: React.FC<CashflowViewProps> = ({ onOpenAddExpenseModa
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="btn-export-cashflow"
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-3.5 py-2 text-xs font-bold text-[#4648d4] hover:bg-[#ebeaff] hover:border-[#4648d4] transition-all shadow-xs"
+            title="Ekspor Buku Kas Akuntansi (CSV / Excel Rapi)"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span>Ekspor Buku Kas CSV</span>
+          </button>
           <button
             onClick={() => {
               setCurrentTab('reports');
@@ -251,6 +263,13 @@ export const CashflowView: React.FC<CashflowViewProps> = ({ onOpenAddExpenseModa
           </table>
         </div>
       </div>
+
+      {/* Accounting CSV & Excel Export Modal */}
+      <ExportAccountingModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        defaultReportType="cashflow_ledger"
+      />
     </div>
   );
 };

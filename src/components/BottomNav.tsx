@@ -2,8 +2,8 @@ import React from 'react';
 import {
   LayoutDashboard,
   ShoppingCart,
+  Receipt,
   Package,
-  Wallet,
   BarChart3,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -15,8 +15,8 @@ export const BottomNav: React.FC = () => {
   const navItems: { id: MainTab; label: string; icon: React.FC<{ className?: string }>; badgeCount?: number }[] = [
     { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard },
     { id: 'pos', label: 'POS Kasir', icon: ShoppingCart, badgeCount: cart.reduce((a, c) => a + c.quantity, 0) },
+    { id: 'transactions', label: 'Riwayat', icon: Receipt },
     { id: 'products', label: 'Produk', icon: Package },
-    { id: 'cashflow', label: 'Arus Kas', icon: Wallet },
     { id: 'reports', label: 'Laporan', icon: BarChart3 },
   ];
 

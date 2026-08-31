@@ -21,6 +21,13 @@ import {
   Power,
   RefreshCw,
   BluetoothSearching,
+  Key,
+  Sparkles,
+  Lock,
+  Unlock,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -38,6 +45,8 @@ export const SettingsView: React.FC = () => {
     setCurrentTab,
     exportBackupJson,
     showToast,
+    currentLicense,
+    activateLicenseKey,
   } = useApp();
 
   const [formData, setFormData] = useState({
@@ -55,6 +64,27 @@ export const SettingsView: React.FC = () => {
   const [btState, setBtState] = useState<BluetoothPrinterState>(
     bluetoothPrinter.getState()
   );
+
+  // License Activation State
+  const [activationKeyInput, setActivationKeyInput] = useState('');
+  const [isActivating, setIsActivating] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+
+  const handleActivateLicense = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activationKeyInput.trim()) {
+      showToast('Harap masukkan nomor serial lisensi!', 'warning');
+      return;
+    }
+    setIsActivating(true);
+    setTimeout(() => {
+      const res = activateLicenseKey(activationKeyInput.trim());
+      setIsActivating(false);
+      if (res.success) {
+        setActivationKeyInput('');
+      }
+    }, 600);
+  };
 
   useEffect(() => {
     const unsubscribe = bluetoothPrinter.subscribe((state) => {
@@ -164,6 +194,10 @@ export const SettingsView: React.FC = () => {
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span>Terhubung</span>
                   </span>
+                ) : btState.error ? (
+                  <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-md">
+                    Perlu Bantuan Pairing
+                  </span>
                 ) : (
                   <span className="text-[10px] font-bold text-[#767680] bg-gray-200 px-2 py-0.5 rounded-md">
                     Tidak Terhubung
@@ -178,7 +212,7 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {btState.isConnected ? (
               <>
                 <button
@@ -222,13 +256,27 @@ export const SettingsView: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsBtModalOpen(true)}
-              className="flex items-center gap-1 rounded-xl bg-white border border-[#d2d1dc] px-3 py-2 text-xs font-bold text-[#1b1b23] hover:bg-[#f3f2fa] transition-all shadow-2xs"
+              className="flex items-center gap-1.5 rounded-xl bg-white border border-[#d2d1dc] px-3 py-2 text-xs font-bold text-[#1b1b23] hover:bg-[#f3f2fa] transition-all shadow-2xs"
             >
               <Sliders className="h-3.5 w-3.5 text-blue-600" />
-              <span>Panduan</span>
+              <span>Diagnostik & Panduan</span>
             </button>
           </div>
         </div>
+
+        {/* Error Notification if any */}
+        {btState.error && !btState.isConnected && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-900 flex items-center justify-between gap-2">
+            <p className="leading-snug">{btState.error}</p>
+            <button
+              type="button"
+              onClick={() => setIsBtModalOpen(true)}
+              className="text-[11px] font-bold text-red-700 underline shrink-0 hover:text-red-900"
+            >
+              Buka Solusi Error
+            </button>
+          </div>
+        )}
 
         {/* Quick Format & Auto-Print Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-blue-200/50">
@@ -321,6 +369,126 @@ export const SettingsView: React.FC = () => {
             <span>Buka Panel Pemulihan & Restore</span>
             <ChevronRight className="h-3.5 w-3.5 text-[#767680]" />
           </button>
+        </div>
+      </div>
+
+      {/* Lisensi Software & Status Keamanan Multi-Tenant */}
+      <div className="bg-gradient-to-br from-[#1b1b23] via-[#2a2a36] to-[#1b1b23] p-6 rounded-3xl text-white shadow-md space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-900 shadow-md">
+              <Key className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-black text-white">
+                  Lisensi Software POS & Keamanan Akun
+                </h3>
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${
+                    currentLicense.tier === 'ENTERPRISE'
+                      ? 'bg-purple-500/30 text-purple-300 border border-purple-400/40'
+                      : currentLicense.tier === 'PRO'
+                      ? 'bg-indigo-500/30 text-indigo-300 border border-indigo-400/40'
+                      : 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/40'
+                  }`}
+                >
+                  {currentLicense.tier} EDITION
+                </span>
+              </div>
+              <p className="text-xs text-gray-300 mt-0.5">
+                Data toko Anda terenkripsi dan terisolasi secara mandiri dalam partisi aman (Zero-Data Leakage).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-emerald-400 border border-emerald-500/30">
+              <ShieldCheck className="h-4 w-4" />
+              <span>Status: {currentLicense.status}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* License Details Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-white/10 text-xs">
+          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-gray-400">Nomor Serial Aktif:</span>
+            <div className="flex items-center justify-between">
+              <span className="font-mono font-black text-amber-300 break-all select-all">
+                {currentLicense.licenseKey}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(currentLicense.licenseKey);
+                  setCopiedKey(true);
+                  showToast('Serial lisensi disalin!', 'info');
+                  setTimeout(() => setCopiedKey(false), 2000);
+                }}
+                className="p-1 rounded-lg hover:bg-white/10 text-gray-300"
+                title="Salin Serial"
+              >
+                {copiedKey ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-gray-400">Masa Berlaku:</span>
+            <p className="font-bold text-white flex items-center gap-1.5">
+              {currentLicense.expiresAt === null ? (
+                <>
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  <span>SEUMUR HIDUP (Permanen)</span>
+                </>
+              ) : (
+                <span>
+                  Hingga{' '}
+                  {new Date(currentLicense.expiresAt).toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-gray-400">Kapasitas & Fitur:</span>
+            <p className="font-bold text-white">
+              {currentLicense.maxCashiers > 100 ? 'Unlimited Kasir' : `Maks. ${currentLicense.maxCashiers} Kasir`} •{' '}
+              {currentLicense.maxProducts > 10000 ? 'Unlimited Produk' : `${currentLicense.maxProducts} Produk`}
+            </p>
+          </div>
+        </div>
+
+        {/* License Activation Form */}
+        <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Unlock className="h-3.5 w-3.5 text-amber-400" />
+              <span>Aktivasi / Perpanjang Nomor Serial Lisensi Baru:</span>
+            </span>
+          </div>
+
+          <form onSubmit={handleActivateLicense} className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              placeholder="Contoh: FPRO-PRO-XXXX-XXXX-XXXX"
+              value={activationKeyInput}
+              onChange={(e) => setActivationKeyInput(e.target.value.toUpperCase())}
+              className="flex-1 rounded-xl border border-white/20 bg-black/40 px-3.5 py-2.5 text-xs font-mono font-bold text-amber-300 placeholder-gray-500 focus:border-amber-400 focus:outline-hidden"
+            />
+            <button
+              type="submit"
+              disabled={isActivating}
+              className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-5 py-2.5 text-xs font-extrabold text-slate-950 shadow-sm transition-all disabled:opacity-50 shrink-0"
+            >
+              {isActivating ? 'Memverifikasi...' : 'Aktivasi Lisensi'}
+            </button>
+          </form>
         </div>
       </div>
 

@@ -12,6 +12,8 @@ import {
   CategoryItem,
   AuthUser,
   BackupData,
+  AppLicense,
+  InAppNotification,
 } from '../types';
 import {
   initialProducts,
@@ -21,6 +23,8 @@ import {
   initialStoreProfile,
   initialCategories,
 } from '../data/mockData';
+import { SecureVault, generateTenantId } from '../utils/security';
+import { LicenseManager } from '../utils/licenseManager';
 
 interface ToastNotification {
   id: string;
@@ -104,8 +108,16 @@ interface AppContextType {
   expenses: ExpenseRecord[];
   addExpense: (expense: Omit<ExpenseRecord, 'id' | 'timestamp'>) => void;
   deleteExpense: (id: string) => void;
+  deleteTransaction: (id: string) => void;
+  updateTransactionStatus: (id: string, status: 'Selesai' | 'Dibatalkan' | 'Tertunda') => void;
+  reprintReceipt: (trx: Transaction) => void;
+  // Customers
   customers: Customer[];
-  addCustomer: (customer: Omit<Customer, 'id'>) => void;
+  addCustomer: (customer: Omit<Customer, 'id'>) => Customer;
+  updateCustomer: (id: string, updated: Partial<Customer>) => void;
+  deleteCustomer: (id: string) => void;
+  recordCustomerDebtPayment: (customerId: string, amount: number) => void;
+  adjustCustomerPoints: (customerId: string, pointsDelta: number) => void;
 
   // Checkout modal flow
   isPaymentModalOpen: boolean;
@@ -126,6 +138,23 @@ interface AppContextType {
   toasts: ToastNotification[];
   showToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
   dismissToast: (id: string) => void;
+
+  // In-App Notification Center
+  notifications: InAppNotification[];
+  unreadNotificationCount: number;
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  clearNotifications: () => void;
+  deleteNotification: (id: string) => void;
+  addCustomNotification: (notif: Omit<InAppNotification, 'id' | 'timestamp' | 'isRead'>) => void;
+
+  // Licensing & Software Monetization
+  currentLicense: AppLicense;
+  activateLicenseKey: (serialKey: string) => { success: boolean; message: string; license?: AppLicense };
+  refreshLicense: () => void;
+  isSuperAdminOpen: boolean;
+  setIsSuperAdminOpen: (open: boolean) => void;
+  openSuperAdminPortal: () => void;
 
   // Utilities
   formatCurrency: (amount: number) => string;
@@ -181,7 +210,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : initialAuthUsers[0];
   });
 
-  // Pending OTP verification cache
+  // Active Tenant Partition Key
+  const currentTenantId = currentUser
+    ? generateTenantId(currentUser.id, currentUser.businessName)
+    : 'tenant_kopi_resto_nu_001';
+
+  // Super Admin Portal Mode
+  const [isSuperAdminOpen, setIsSuperAdminOpen] = useState<boolean>(() => {
+    return window.location.hash === '#superadmin' || new URLSearchParams(window.location.search).get('portal') === 'superadmin';
+  });
+
+  // Active Software License State
+  const [currentLicense, setCurrentLicense] = useState<AppLicense>(() => {
+    return LicenseManager.getTenantLicense(currentTenantId, currentUser?.businessName || 'Kopi & Resto Nusantara');
+  });
+
+  // Pending OTP verification cache (in-memory, sanitized)
   const [pendingVerifications, setPendingVerifications] = useState<{
     [email: string]: { code: string; expiresAt: number; userData: Partial<AuthUser> };
   }>({});
@@ -190,10 +234,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [latestSimulatedEmail, setLatestSimulatedEmail] = useState<SimulatedEmail | null>(null);
 
-  // Store & Settings
+  // Store & Settings (Isolated per Tenant Vault)
   const [storeProfile, setStoreProfile] = useState<StoreProfile>(() => {
-    const saved = localStorage.getItem('finansialpro_store');
-    return saved ? JSON.parse(saved) : initialStoreProfile;
+    return SecureVault.getTenantItem<StoreProfile>(currentTenantId, 'store', initialStoreProfile);
   });
 
   const [cashierName, setCashierName] = useState<string>(() => {
@@ -201,28 +244,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [categories, setCategories] = useState<CategoryItem[]>(() => {
-    const saved = localStorage.getItem('finansialpro_categories');
-    return saved ? JSON.parse(saved) : initialCategories;
+    return SecureVault.getTenantItem<CategoryItem[]>(currentTenantId, 'categories', initialCategories);
   });
 
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('finansialpro_products');
-    return saved ? JSON.parse(saved) : initialProducts;
+    return SecureVault.getTenantItem<Product[]>(currentTenantId, 'products', initialProducts);
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('finansialpro_transactions');
-    return saved ? JSON.parse(saved) : initialTransactions;
+    return SecureVault.getTenantItem<Transaction[]>(currentTenantId, 'transactions', initialTransactions);
   });
 
   const [expenses, setExpenses] = useState<ExpenseRecord[]>(() => {
-    const saved = localStorage.getItem('finansialpro_expenses');
-    return saved ? JSON.parse(saved) : initialExpenses;
+    return SecureVault.getTenantItem<ExpenseRecord[]>(currentTenantId, 'expenses', initialExpenses);
   });
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
-    const saved = localStorage.getItem('finansialpro_customers');
-    return saved ? JSON.parse(saved) : initialCustomers;
+    return SecureVault.getTenantItem<Customer[]>(currentTenantId, 'customers', initialCustomers);
   });
 
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -237,7 +275,120 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Toasts
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
 
-  // Local storage synchronizers
+  // In-App Notification Center
+  const [notifications, setNotifications] = useState<InAppNotification[]>(() => {
+    return SecureVault.getTenantItem<InAppNotification[]>(currentTenantId, 'notifications', []);
+  });
+
+  // Save notifications to tenant vault
+  useEffect(() => {
+    SecureVault.setTenantItem(currentTenantId, 'notifications', notifications);
+  }, [currentTenantId, notifications]);
+
+  // Automatic Low-Stock & Out-of-Stock Notification Engine
+  useEffect(() => {
+    if (!products || products.length === 0) return;
+
+    setNotifications((prev) => {
+      // Keep existing non-stock notifications or preserved read state
+      const readIds = new Set(prev.filter((n) => n.isRead).map((n) => n.id));
+      const existingMap = new Map<string, InAppNotification>(prev.map((n) => [n.id, n]));
+
+      const generatedStockNotifs: InAppNotification[] = [];
+
+      products.forEach((p) => {
+        const threshold = p.minStockAlert ?? 5;
+        if (p.stock <= 0) {
+          const id = `notif-stock-empty-${p.id}`;
+          const existing = existingMap.get(id);
+          generatedStockNotifs.push({
+            id,
+            type: 'stock_empty',
+            title: `Stok Habis: ${p.name}`,
+            message: `Stok produk "${p.name}" telah habis (0 unit). Segera lakukan restok agar penjualan tidak terganggu.`,
+            timestamp: existing?.timestamp || Date.now(),
+            isRead: readIds.has(id),
+            actionTab: 'products',
+            productId: p.id,
+            productName: p.name,
+            currentStock: p.stock,
+            minStockAlert: threshold,
+            urgency: 'critical',
+          });
+        } else if (p.stock <= threshold) {
+          const id = `notif-stock-low-${p.id}`;
+          const existing = existingMap.get(id);
+          generatedStockNotifs.push({
+            id,
+            type: 'stock_low',
+            title: `Stok Menipis: ${p.name}`,
+            message: `Tersisa ${p.stock} unit (Batas minimum: ${threshold} unit). Pertimbangkan untuk memesan kembali.`,
+            timestamp: existing?.timestamp || Date.now(),
+            isRead: readIds.has(id),
+            actionTab: 'products',
+            productId: p.id,
+            productName: p.name,
+            currentStock: p.stock,
+            minStockAlert: threshold,
+            urgency: 'warning',
+          });
+        }
+      });
+
+      // Keep non-stock notifications (e.g. system, backup, license)
+      const nonStockNotifs = prev.filter((n) => n.type !== 'stock_low' && n.type !== 'stock_empty');
+
+      // Combine and sort: critical unread first, then by timestamp descending
+      const combined = [...generatedStockNotifs, ...nonStockNotifs].sort((a, b) => b.timestamp - a.timestamp);
+      return combined;
+    });
+  }, [products]);
+
+  const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
+
+  const markNotificationAsRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+    );
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    showToast('Semua notifikasi ditandai telah dibaca', 'info');
+  };
+
+  const clearNotifications = () => {
+    setNotifications([]);
+    showToast('Daftar notifikasi telah dibersihkan', 'info');
+  };
+
+  const deleteNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const addCustomNotification = (notif: Omit<InAppNotification, 'id' | 'timestamp' | 'isRead'>) => {
+    const id = `notif-custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newNotif: InAppNotification = {
+      ...notif,
+      id,
+      timestamp: Date.now(),
+      isRead: false,
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+  };
+
+  // Startup Security Sanitization
+  useEffect(() => {
+    SecureVault.sanitizeLegacyGlobalCache();
+  }, []);
+
+  // Sync current license when tenant changes
+  useEffect(() => {
+    const lic = LicenseManager.getTenantLicense(currentTenantId, currentUser?.businessName || storeProfile.name);
+    setCurrentLicense(lic);
+  }, [currentTenantId, currentUser]);
+
+  // Synchronize Tenant Data Isolation Vaults
   useEffect(() => {
     localStorage.setItem('finansialpro_registered_users', JSON.stringify(registeredUsers));
   }, [registeredUsers]);
@@ -251,28 +402,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('finansialpro_store', JSON.stringify(storeProfile));
-  }, [storeProfile]);
+    SecureVault.setTenantItem(currentTenantId, 'store', storeProfile);
+  }, [currentTenantId, storeProfile]);
 
   useEffect(() => {
-    localStorage.setItem('finansialpro_categories', JSON.stringify(categories));
-  }, [categories]);
+    SecureVault.setTenantItem(currentTenantId, 'categories', categories);
+  }, [currentTenantId, categories]);
 
   useEffect(() => {
-    localStorage.setItem('finansialpro_products', JSON.stringify(products));
-  }, [products]);
+    SecureVault.setTenantItem(currentTenantId, 'products', products);
+  }, [currentTenantId, products]);
 
   useEffect(() => {
-    localStorage.setItem('finansialpro_transactions', JSON.stringify(transactions));
-  }, [transactions]);
+    SecureVault.setTenantItem(currentTenantId, 'transactions', transactions);
+  }, [currentTenantId, transactions]);
 
   useEffect(() => {
-    localStorage.setItem('finansialpro_expenses', JSON.stringify(expenses));
-  }, [expenses]);
+    SecureVault.setTenantItem(currentTenantId, 'expenses', expenses);
+  }, [currentTenantId, expenses]);
 
   useEffect(() => {
-    localStorage.setItem('finansialpro_customers', JSON.stringify(customers));
-  }, [customers]);
+    SecureVault.setTenantItem(currentTenantId, 'customers', customers);
+  }, [currentTenantId, customers]);
 
   const showToast = (
     message: string,
@@ -470,6 +621,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(null);
     setCurrentTab('login');
     showToast('Anda telah keluar dari sesi kasir.', 'info');
+  };
+
+  // =========================================================
+  // SOFTWARE LICENSING & ACTIVATION FLOW
+  // =========================================================
+  const activateLicenseKey = (
+    serialKey: string
+  ): { success: boolean; message: string; license?: AppLicense } => {
+    const res = LicenseManager.activateLicense(
+      currentTenantId,
+      serialKey,
+      currentUser?.businessName || storeProfile.name
+    );
+    if (res.success && res.license) {
+      setCurrentLicense(res.license);
+      showToast(res.message, 'success');
+    } else {
+      showToast(res.message, 'error');
+    }
+    return res;
+  };
+
+  const refreshLicense = () => {
+    const lic = LicenseManager.getTenantLicense(
+      currentTenantId,
+      currentUser?.businessName || storeProfile.name
+    );
+    setCurrentLicense(lic);
+  };
+
+  const openSuperAdminPortal = () => {
+    setIsSuperAdminOpen(true);
+    window.location.hash = '#superadmin';
   };
 
   // =========================================================
@@ -712,16 +896,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Catatan pengeluaran berhasil dihapus', 'info');
   };
 
-  const addCustomer = (custData: Omit<Customer, 'id'>) => {
+  const addCustomer = (custData: Omit<Customer, 'id'>): Customer => {
     const newId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
     const newCustomer: Customer = {
       ...custData,
       id: newId,
-      totalOrders: 0,
+      tier: custData.tier || 'Reguler',
+      totalOrders: custData.totalOrders || 0,
+      totalSpent: custData.totalSpent || 0,
+      points: custData.points || 0,
+      debt: custData.debt || 0,
+      createdAt: custData.createdAt || new Date().toISOString().split('T')[0],
     };
-    setCustomers((prev) => [...prev, newCustomer]);
+    setCustomers((prev) => [newCustomer, ...prev]);
     setSelectedCustomer(newCustomer);
-    showToast(`Pelanggan "${newCustomer.name}" ditambahkan`, 'success');
+    showToast(`Pelanggan "${newCustomer.name}" berhasil ditambahkan`, 'success');
+    return newCustomer;
+  };
+
+  const updateCustomer = (id: string, updated: Partial<Customer>) => {
+    setCustomers((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...updated } : c))
+    );
+    if (selectedCustomer?.id === id) {
+      setSelectedCustomer((prev) => (prev ? { ...prev, ...updated } : null));
+    }
+    showToast('Data pelanggan berhasil diperbarui', 'success');
+  };
+
+  const deleteCustomer = (id: string) => {
+    const target = customers.find((c) => c.id === id);
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
+    if (selectedCustomer?.id === id) {
+      setSelectedCustomer(null);
+    }
+    showToast(`Pelanggan "${target?.name || id}" telah dihapus`, 'info');
+  };
+
+  const recordCustomerDebtPayment = (customerId: string, amount: number) => {
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          const currentDebt = c.debt || 0;
+          const newDebt = Math.max(0, currentDebt - amount);
+          return { ...c, debt: newDebt };
+        }
+        return c;
+      })
+    );
+    showToast(`Pembayaran piutang Rp ${amount.toLocaleString()} dicatat`, 'success');
+  };
+
+  const adjustCustomerPoints = (customerId: string, pointsDelta: number) => {
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          const currentPoints = c.points || 0;
+          const newPoints = Math.max(0, currentPoints + pointsDelta);
+          return { ...c, points: newPoints };
+        }
+        return c;
+      })
+    );
+    showToast(
+      pointsDelta > 0
+        ? `+${pointsDelta} Poin ditambahkan ke pelanggan`
+        : `${pointsDelta} Poin disesuaikan`,
+      'info'
+    );
   };
 
   const processPayment = (method: PaymentMethod, cashGiven?: number): Transaction => {
@@ -793,6 +1035,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    // Update customer spending, loyalty points & order count
+    if (selectedCustomer) {
+      setCustomers((prev) =>
+        prev.map((c) => {
+          if (c.id === selectedCustomer.id) {
+            const newOrders = (c.totalOrders || 0) + 1;
+            const newSpent = (c.totalSpent || 0) + total;
+            const earnedPoints = Math.floor(total / 10000);
+            const newPoints = (c.points || 0) + earnedPoints;
+
+            let updatedTier = c.tier || 'Reguler';
+            if (newSpent >= 2500000) {
+              updatedTier = 'VIP';
+            } else if (newSpent >= 1000000) {
+              updatedTier = 'Gold';
+            } else if (newSpent >= 350000) {
+              updatedTier = 'Silver';
+            }
+
+            return {
+              ...c,
+              totalOrders: newOrders,
+              totalSpent: newSpent,
+              points: newPoints,
+              tier: updatedTier,
+              lastOrderDate: dateFormatted,
+            };
+          }
+          return c;
+        })
+      );
+    }
+
     // Save transaction
     setTransactions((prev) => [newTransaction, ...prev]);
 
@@ -804,6 +1079,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Transaksi ${orderNum} berhasil!`, 'success');
 
     return newTransaction;
+  };
+
+  const reprintReceipt = (trx: Transaction) => {
+    setCompletedTransaction(trx);
+    setIsReceiptModalOpen(true);
+    showToast(`Membuka struk pesanan ${trx.orderNumber} untuk dicetak ulang`, 'info');
+  };
+
+  const deleteTransaction = (id: string) => {
+    const target = transactions.find((t) => t.id === id);
+    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    showToast(`Transaksi ${target?.orderNumber || id} telah dihapus dari riwayat`, 'info');
+  };
+
+  const updateTransactionStatus = (
+    id: string,
+    status: 'Selesai' | 'Dibatalkan' | 'Tertunda'
+  ) => {
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status } : t))
+    );
+    showToast(`Status transaksi diperbarui menjadi "${status}"`, 'success');
   };
 
   return (
@@ -855,8 +1152,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         expenses,
         addExpense,
         deleteExpense,
+        deleteTransaction,
+        updateTransactionStatus,
+        reprintReceipt,
         customers,
         addCustomer,
+        updateCustomer,
+        deleteCustomer,
+        recordCustomerDebtPayment,
+        adjustCustomerPoints,
         isPaymentModalOpen,
         setIsPaymentModalOpen,
         pendingPaymentMethod,
@@ -871,7 +1175,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toasts,
         showToast,
         dismissToast,
+        notifications,
+        unreadNotificationCount,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        clearNotifications,
+        deleteNotification,
+        addCustomNotification,
         formatCurrency,
+        currentLicense,
+        activateLicenseKey,
+        refreshLicense,
+        isSuperAdminOpen,
+        setIsSuperAdminOpen,
+        openSuperAdminPortal,
       }}
     >
       {children}

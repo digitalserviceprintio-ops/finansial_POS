@@ -1,10 +1,14 @@
 export type ProductCategory = string;
 
+export type CustomerTier = 'Reguler' | 'Silver' | 'Gold' | 'VIP';
+
 export type MainTab =
   | 'dashboard'
   | 'pos'
+  | 'transactions'
   | 'products'
   | 'categories'
+  | 'customers'
   | 'cashflow'
   | 'reports'
   | 'backup'
@@ -87,7 +91,16 @@ export interface Customer {
   name: string;
   phone?: string;
   email?: string;
+  address?: string;
+  notes?: string;
+  tier?: CustomerTier;
   totalOrders?: number;
+  totalSpent?: number;
+  points?: number;
+  debt?: number; // Piutang belum lunas
+  avatarUrl?: string;
+  createdAt?: string;
+  lastOrderDate?: string;
 }
 
 export type PaymentMethod = 'QRIS' | 'Tunai' | 'Transfer Bank' | 'Kartu Debit';
@@ -140,3 +153,94 @@ export interface StoreProfile {
   currencySymbol: string;
   avatarUrl: string;
 }
+
+// Software Licensing Types
+export type LicenseTier = 'TRIAL' | 'STARTER' | 'PRO' | 'ENTERPRISE';
+export type LicenseStatus = 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'UNACTIVATED';
+
+export interface LicenseFeatureSet {
+  bluetoothPrint: boolean;
+  multiUser: boolean;
+  exportCsv: boolean;
+  advancedReports: boolean;
+  cloudBackup: boolean;
+  customBranding: boolean;
+}
+
+export interface AppLicense {
+  id: string;
+  licenseKey: string;
+  tenantId: string;
+  businessName: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  tier: LicenseTier;
+  status: LicenseStatus;
+  issuedAt: number; // Timestamp
+  activatedAt: number | null;
+  expiresAt: number | null; // null = Lifetime (Permanen)
+  maxCashiers: number;
+  maxProducts: number;
+  features: LicenseFeatureSet;
+  price: number; // IDR
+  notes?: string;
+  hardwareFingerprint?: string;
+}
+
+export interface SuperAdminSession {
+  isAuthenticated: boolean;
+  adminName: string;
+  loginTimestamp: number;
+}
+
+// In-App Notification System Types
+export type NotificationType = 'stock_low' | 'stock_empty' | 'system' | 'license' | 'backup';
+
+export interface InAppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  timestamp: number;
+  isRead: boolean;
+  actionTab?: MainTab;
+  productId?: string;
+  productName?: string;
+  currentStock?: number;
+  minStockAlert?: number;
+  urgency: 'critical' | 'warning' | 'info';
+}
+
+// Super Admin Audit Log System Types
+export type AuditLogCategory = 'AUTH' | 'LICENSE' | 'PRICING' | 'BACKUP' | 'SECURITY' | 'TENANT';
+
+export type AuditLogAction =
+  | 'SUPERADMIN_LOGIN'
+  | 'SUPERADMIN_LOGOUT'
+  | 'LICENSE_GENERATED'
+  | 'LICENSE_STATUS_UPDATED'
+  | 'LICENSE_EXTENDED'
+  | 'LICENSE_PRICE_UPDATED'
+  | 'TIER_PRICE_UPDATED'
+  | 'MASS_BACKUP_DOWNLOADED'
+  | 'MASS_BACKUP_RESTORED'
+  | 'TENANT_PURGED'
+  | 'CLIENT_PIN_GENERATED'
+  | 'SECURITY_AUDIT_VERIFIED';
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: number;
+  formattedDate: string;
+  category: AuditLogCategory;
+  action: AuditLogAction;
+  actionLabel: string;
+  actor: string;
+  targetId?: string;
+  targetName?: string;
+  details: string;
+  metadata?: Record<string, any>;
+  ipAddress?: string;
+}
+

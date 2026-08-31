@@ -2,8 +2,10 @@ import React from 'react';
 import {
   LayoutDashboard,
   ShoppingCart,
+  Receipt,
   Package,
   Layers,
+  Users,
   Wallet,
   BarChart3,
   HardDrive,
@@ -26,6 +28,8 @@ export const Sidebar: React.FC = () => {
     cart,
     products,
     categories,
+    customers,
+    transactions,
     logoutUser,
   } = useApp();
 
@@ -45,6 +49,13 @@ export const Sidebar: React.FC = () => {
       badgeColor: cart.length > 0 ? 'bg-[#ba1a1a] text-white' : 'bg-[#ebeaff] text-[#4648d4]',
     },
     {
+      id: 'transactions',
+      label: 'Riwayat Transaksi',
+      icon: Receipt,
+      badge: `${transactions.length}`,
+      badgeColor: 'bg-blue-100 text-blue-800',
+    },
+    {
       id: 'products',
       label: 'Produk & Stok',
       icon: Package,
@@ -57,6 +68,13 @@ export const Sidebar: React.FC = () => {
       icon: Layers,
       badge: `${categories.length}`,
       badgeColor: 'bg-[#ebeaff] text-[#4648d4]',
+    },
+    {
+      id: 'customers',
+      label: 'Atur Pelanggan',
+      icon: Users,
+      badge: `${customers.length}`,
+      badgeColor: 'bg-blue-100 text-blue-800',
     },
     {
       id: 'cashflow',

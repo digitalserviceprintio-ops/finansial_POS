@@ -12,7 +12,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Helper fallback SKU generator
 function generateFallbackSku(name: string, category: string = 'Umum', existingSkus: string[] = []): {
@@ -201,6 +202,226 @@ Format SKU yang diharapkan:
     console.error('Error generating SKU:', error);
     res.status(500).json({
       error: 'Gagal membuat kode SKU. Silakan coba lagi atau isi manual.',
+    });
+  }
+});
+
+// ==========================================
+// API: VEO VIDEO GENERATION (veo-3.1-fast-generate-preview)
+// ==========================================
+
+// Step 1: Start Video Generation
+app.post('/api/generate-video', async (req, res) => {
+  try {
+    const { image, mimeType = 'image/jpeg', prompt, aspectRatio = '16:9' } = req.body;
+
+    if (!image || typeof image !== 'string') {
+      return res.status(400).json({
+        error: 'Foto / Gambar diperlukan untuk menganimasikan video.',
+      });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.status(400).json({
+        error: 'GEMINI_API_KEY belum dikonfigurasi di server. Silakan atur di Settings > Secrets.',
+      });
+    }
+
+    // Clean base64 string
+    let cleanBase64 = image;
+    let detectedMime = mimeType;
+    if (image.startsWith('data:')) {
+      const match = image.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (match) {
+        detectedMime = match[1];
+        cleanBase64 = match[2];
+      } else {
+        cleanBase64 = image.split(',')[1] || image;
+      }
+    }
+
+    const targetRatio = aspectRatio === '9:16' ? '9:16' : '16:9';
+    const finalPrompt =
+      prompt && typeof prompt === 'string' && prompt.trim()
+        ? prompt.trim()
+        : 'Animate this photo into an engaging cinematic commercial video with dynamic motion, smooth lighting transitions, and professional commercial aesthetics.';
+
+    console.log(`[Veo Video] Initiating generation with model: veo-3.1-fast-generate-preview, ratio: ${targetRatio}`);
+
+    const operation = await ai.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: finalPrompt,
+      image: {
+        imageBytes: cleanBase64,
+        mimeType: detectedMime,
+      },
+      config: {
+        numberOfVideos: 1,
+        resolution: '720p',
+        aspectRatio: targetRatio,
+      },
+    });
+
+    console.log(`[Veo Video] Operation started successfully: ${operation.name}`);
+
+    return res.json({
+      success: true,
+      operationName: operation.name,
+      model: 'veo-3.1-fast-generate-preview',
+      aspectRatio: targetRatio,
+    });
+  } catch (error: any) {
+    console.error('Error starting video generation:', error);
+    let userMsg = error?.message || 'Gagal memulai pembuatan video Veo.';
+    let isQuotaError = false;
+
+    if (
+      String(userMsg).includes('429') ||
+      String(userMsg).includes('RESOURCE_EXHAUSTED') ||
+      String(userMsg).includes('quota')
+    ) {
+      isQuotaError = true;
+      userMsg =
+        'Kuota Gemini API / Veo Anda telah habis atau mencapai batas (RESOURCE_EXHAUSTED / 429). Model video Veo memerlukan API Key dengan penagihan aktif (Billing / Pay-as-you-go). Silakan periksa atau pilih API Key berbayar Anda di menu Settings > Secrets atau coba beberapa saat lagi.';
+    }
+
+    return res.status(isQuotaError ? 429 : 500).json({
+      error: userMsg,
+      isQuotaError,
+      rawError: error?.message,
+    });
+  }
+});
+
+// Step 2: Poll Video Status
+app.post('/api/video-status', async (req, res) => {
+  try {
+    const { operationName } = req.body;
+
+    if (!operationName || typeof operationName !== 'string') {
+      return res.status(400).json({ error: 'operationName diperlukan.' });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.status(400).json({ error: 'GEMINI_API_KEY belum dikonfigurasi.' });
+    }
+
+    const op = { name: operationName } as any;
+    const updated = await ai.operations.getVideosOperation({ operation: op });
+
+    const isDone = Boolean(updated.done);
+    let errorMessage: string | null = null;
+    let isQuotaError = false;
+
+    const rawError = (updated as any).error;
+    if (rawError) {
+      const errStr =
+        typeof rawError === 'string'
+          ? rawError
+          : String(rawError.message || JSON.stringify(rawError));
+
+      if (
+        errStr.includes('429') ||
+        errStr.includes('RESOURCE_EXHAUSTED') ||
+        errStr.includes('quota')
+      ) {
+        isQuotaError = true;
+        errorMessage =
+          'Kuota Gemini API / Veo telah habis (RESOURCE_EXHAUSTED / 429). Silakan gunakan API Key yang memiliki saldo/billing aktif di Settings > Secrets atau tunggu kuota tereset.';
+      } else {
+        errorMessage = errStr;
+      }
+    }
+
+    return res.json({
+      success: true,
+      done: isDone,
+      error: errorMessage,
+      isQuotaError,
+      operationName,
+    });
+  } catch (error: any) {
+    console.error('Error checking video status:', error);
+    let errMsg = error?.message || 'Gagal memeriksa status proses video.';
+    let isQuota = false;
+    if (
+      String(errMsg).includes('429') ||
+      String(errMsg).includes('RESOURCE_EXHAUSTED') ||
+      String(errMsg).includes('quota')
+    ) {
+      isQuota = true;
+      errMsg =
+        'Kuota Gemini API / Veo telah habis (RESOURCE_EXHAUSTED / 429). Pastikan API Key di Settings > Secrets memiliki akun penagihan (billing) aktif.';
+    }
+    return res.status(500).json({
+      error: errMsg,
+      isQuotaError: isQuota,
+    });
+  }
+});
+
+// Step 3: Download & Stream Video File
+app.all('/api/video-download', async (req, res) => {
+  try {
+    const operationName =
+      req.body?.operationName || req.query?.operationName || req.query?.op;
+
+    if (!operationName || typeof operationName !== 'string') {
+      return res.status(400).json({ error: 'operationName diperlukan.' });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.status(400).json({ error: 'GEMINI_API_KEY belum dikonfigurasi.' });
+    }
+
+    const op = { name: operationName } as any;
+    const updated = await ai.operations.getVideosOperation({ operation: op });
+
+    if (!updated.done) {
+      return res.status(202).json({
+        error: 'Video masih dalam proses rendering. Silakan tunggu beberapa saat lagi.',
+        done: false,
+      });
+    }
+
+    const rawErr = (updated as any).error;
+    if (rawErr) {
+      return res.status(500).json({
+        error: typeof rawErr === 'string' ? rawErr : rawErr.message || 'Pembuatan video gagal oleh model AI.',
+      });
+    }
+
+    const videoUri = updated.response?.generatedVideos?.[0]?.video?.uri;
+    if (!videoUri) {
+      return res.status(404).json({
+        error: 'File video tidak ditemukan dalam hasil respon operasi.',
+      });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY!;
+    const videoResponse = await fetch(videoUri, {
+      headers: { 'x-goog-api-key': apiKey },
+    });
+
+    if (!videoResponse.ok) {
+      return res.status(videoResponse.status).json({
+        error: `Gagal mengunduh video dari server Google (Status: ${videoResponse.status})`,
+      });
+    }
+
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', 'attachment; filename="finansialpro-veo-video.mp4"');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    const arrayBuffer = await videoResponse.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (error: any) {
+    console.error('Error downloading video:', error);
+    return res.status(500).json({
+      error: error?.message || 'Gagal mengunduh file video hasil generasi.',
     });
   }
 });

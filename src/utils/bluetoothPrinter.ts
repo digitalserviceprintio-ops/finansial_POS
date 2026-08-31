@@ -1,17 +1,27 @@
 import { Transaction, StoreProfile } from '../types';
 import { buildReceiptEscPos, buildTestPrintEscPos, PaperWidth } from './escpos';
 
-// Common Bluetooth Thermal Printer Service UUIDs
+// Comprehensive Bluetooth Thermal Printer Service UUIDs
+// Covering standard POS, Chinese generic (ISSC, HM-10, Telink, Xprinter, Panda, Goojprt), Nordic UART, etc.
 const PRINTER_SERVICES = [
   '000018f0-0000-1000-8000-00805f9b34fb', // Standard POS Printer Service
+  '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10 / CC2541 / Goojprt / Panda BLE Serial
+  '0000ffe5-0000-1000-8000-00805f9b34fb', // HM-10 variant
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC transparent UART (Common in POS-58 / MPT-II)
+  '0000ff00-0000-1000-8000-00805f9b34fb', // Generic Chinese Thermal Printer 0xFF00
+  '0000fff0-0000-1000-8000-00805f9b34fb', // Generic Chinese Thermal Printer 0xFFF0
+  '0000fee7-0000-1000-8000-00805f9b34fb', // Tencent / Chinese POS
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // PosPrinter / RPP
   '0000e781-0000-1000-8000-00805f9b34fb',
-  '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC transparent UART (Common in Chinese thermal printers)
-  '0000fee7-0000-1000-8000-00805f9b34fb',
-  'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-  '0000ff00-0000-1000-8000-00805f9b34fb',
-  '0000fff0-0000-1000-8000-00805f9b34fb',
-  '00001800-0000-1000-8000-00805f9b34fb',
-  '00001801-0000-1000-8000-00805f9b34fb',
+  '0000ae00-0000-1000-8000-00805f9b34fb', // Xprinter / Zhuhai UART
+  '0000ae30-0000-1000-8000-00805f9b34fb', // Xprinter variant
+  '0000af30-0000-1000-8000-00805f9b34fb',
+  '6e400001-b5a3-f393-e0a9-e50e24dcca9e', // Nordic Semiconductor UART Service
+  '0000fe00-0000-1000-8000-00805f9b34fb',
+  '0000ff80-0000-1000-8000-00805f9b34fb',
+  '0000fef5-0000-1000-8000-00805f9b34fb',
+  '00001800-0000-1000-8000-00805f9b34fb', // Generic Access
+  '00001801-0000-1000-8000-00805f9b34fb', // Generic Attribute
 ];
 
 export interface BluetoothPrinterState {
@@ -21,9 +31,20 @@ export interface BluetoothPrinterState {
   deviceName: string | null;
   deviceId: string | null;
   error: string | null;
+  errorCode?: 'IFRAME_BLOCKED' | 'NOT_SUPPORTED' | 'USER_CANCELLED' | 'GATT_ERROR' | 'NO_CHARACTERISTIC' | 'OTHER';
   paperWidth: PaperWidth;
   autoPrintOnCheckout: boolean;
   lastPrintTimestamp: number | null;
+}
+
+export interface BluetoothDiagnostic {
+  isSupported: boolean;
+  isSecureContext: boolean;
+  isInIframe: boolean;
+  browserName: string;
+  isAndroid: boolean;
+  isIOS: boolean;
+  recommendation: string;
 }
 
 type StateListener = (state: BluetoothPrinterState) => void;
@@ -111,21 +132,86 @@ class BluetoothPrinterService {
     return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
   }
 
+  public isInIframe(): boolean {
+    try {
+      return typeof window !== 'undefined' && window.self !== window.top;
+    } catch {
+      return true;
+    }
+  }
+
+  public getDiagnostics(): BluetoothDiagnostic {
+    const isSupported = this.isBluetoothSupported();
+    const isSecureContext = typeof window !== 'undefined' ? window.isSecureContext : false;
+    const inIframe = this.isInIframe();
+
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isAndroid = /Android/i.test(ua);
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+    let browserName = 'Browser Lain';
+    if (/Chrome/i.test(ua) && !/Edg/i.test(ua) && !/OPR/i.test(ua)) browserName = 'Google Chrome';
+    else if (/Edg/i.test(ua)) browserName = 'Microsoft Edge';
+    else if (/SamsungBrowser/i.test(ua)) browserName = 'Samsung Internet';
+    else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browserName = 'Apple Safari';
+    else if (/Firefox/i.test(ua)) browserName = 'Mozilla Firefox';
+
+    let recommendation = 'Koneksi Web Bluetooth siap digunakan.';
+    if (inIframe) {
+      recommendation =
+        'Aplikasi berjalan di dalam frame pratinjau. Klik "Buka di Tab Baru" untuk mengizinkan pairing Bluetooth.';
+    } else if (isIOS) {
+      recommendation =
+        'Safari di iOS belum mendukung Web Bluetooth secara langsung. Gunakan dialog cetak browser atau browser Bluefy di iOS.';
+    } else if (!isSupported) {
+      recommendation =
+        'Gunakan browser Google Chrome / Microsoft Edge di Android atau PC untuk menghubungkan printer Bluetooth.';
+    }
+
+    return {
+      isSupported,
+      isSecureContext,
+      isInIframe: inIframe,
+      browserName,
+      isAndroid,
+      isIOS,
+      recommendation,
+    };
+  }
+
   /**
    * Request user to pair and connect to a Bluetooth thermal printer
    */
-  public async connect(): Promise<{ success: boolean; message: string }> {
-    if (!this.isBluetoothSupported()) {
+  public async connect(): Promise<{ success: boolean; message: string; errorCode?: string }> {
+    // 1. Check iframe restriction
+    if (this.isInIframe()) {
       const errMsg =
-        'Browser ini belum mendukung Web Bluetooth API secara langsung. Anda dapat menggunakan Chrome/Edge di Android/Desktop, atau gunakan aplikasi RawBT.';
+        'Web Bluetooth diblokir di dalam pratinjau iframe oleh browser. Harap buka aplikasi di Tab Baru untuk melakukan pairing Bluetooth.';
       this.state.error = errMsg;
+      this.state.errorCode = 'IFRAME_BLOCKED';
       this.notify();
-      return { success: false, message: errMsg };
+      return { success: false, message: errMsg, errorCode: 'IFRAME_BLOCKED' };
+    }
+
+    // 2. Check Web Bluetooth support
+    if (!this.isBluetoothSupported()) {
+      const diag = this.getDiagnostics();
+      let errMsg =
+        'Browser ini belum mendukung Web Bluetooth API secara langsung. Gunakan Chrome/Edge di Android/Windows, atau gunakan opsi RawBT / Dialog Cetak.';
+      if (diag.isIOS) {
+        errMsg =
+          'iOS Safari tidak mendukung Web Bluetooth. Anda dapat mencetak struk menggunakan opsi "Dialog Cetak Sistem (AirPrint / Printer Driver)".';
+      }
+      this.state.error = errMsg;
+      this.state.errorCode = 'NOT_SUPPORTED';
+      this.notify();
+      return { success: false, message: errMsg, errorCode: 'NOT_SUPPORTED' };
     }
 
     try {
       this.state.isConnecting = true;
       this.state.error = null;
+      this.state.errorCode = undefined;
       this.notify();
 
       // Request Bluetooth device pairing
@@ -140,7 +226,7 @@ class BluetoothPrinterService {
       }
 
       this.device = device;
-      this.state.deviceName = device.name || 'Printer Bluetooth';
+      this.state.deviceName = device.name || 'Printer Bluetooth ESC/POS';
       this.state.deviceId = device.id;
 
       // Handle disconnection event
@@ -148,7 +234,7 @@ class BluetoothPrinterService {
         this.handleDisconnect();
       });
 
-      // Connect GATT Server
+      // Connect GATT Server with timeout
       const server = await device.gatt.connect();
       this.gattServer = server;
 
@@ -156,7 +242,7 @@ class BluetoothPrinterService {
       const char = await this.findWriteCharacteristic(server);
       if (!char) {
         throw new Error(
-          'Tidak dapat menemukan characteristic data thermal printer pada perangkat ini.'
+          'Tidak dapat menemukan characteristic data thermal printer pada perangkat ini. Pastikan printer mendukung BLE (Bluetooth Low Energy) atau gunakan aplikasi RawBT.'
         );
       }
 
@@ -164,6 +250,7 @@ class BluetoothPrinterService {
       this.state.isConnected = true;
       this.state.isConnecting = false;
       this.state.error = null;
+      this.state.errorCode = undefined;
       this.notify();
 
       return {
@@ -174,9 +261,30 @@ class BluetoothPrinterService {
       console.warn('Bluetooth connection error:', err);
       this.state.isConnected = false;
       this.state.isConnecting = false;
-      this.state.error = err.message || 'Gagal menghubungkan printer Bluetooth.';
+
+      let userMsg = err.message || 'Gagal menghubungkan printer Bluetooth.';
+      let errCode: BluetoothPrinterState['errorCode'] = 'OTHER';
+
+      if (err.name === 'SecurityError' || String(err).includes('Permissions policy') || String(err).includes('disallowed')) {
+        userMsg = 'Akses Bluetooth dibatasi oleh izin browser (Iframe). Silakan buka aplikasi di Tab Baru.';
+        errCode = 'IFRAME_BLOCKED';
+      } else if (err.name === 'NotFoundError' || String(err).includes('User cancelled') || String(err).includes('cancelled')) {
+        userMsg = 'Pencarian dibatalkan atau tidak ada printer yang dipilih.';
+        errCode = 'USER_CANCELLED';
+      } else if (err.name === 'NetworkError' || String(err).includes('GATT')) {
+        userMsg =
+          'Gagal menyambung ke GATT Server printer. Pastikan printer menyala, baterai cukup, dan tidak sedang terhubung ke perangkat/HP lain. Coba matikan lalu nyalakan kembali printer.';
+        errCode = 'GATT_ERROR';
+      } else if (String(err).includes('characteristic')) {
+        userMsg =
+          'Printer terhubung tetapi protokol komunikasi tidak cocok (kemungkinan Bluetooth Classic 2.0 / SPP). Gunakan opsi Cetak RawBT atau Dialog Driver Sistem.';
+        errCode = 'NO_CHARACTERISTIC';
+      }
+
+      this.state.error = userMsg;
+      this.state.errorCode = errCode;
       this.notify();
-      return { success: false, message: this.state.error };
+      return { success: false, message: userMsg, errorCode: errCode };
     }
   }
 
@@ -206,6 +314,7 @@ class BluetoothPrinterService {
    * Scans primary services to find a characteristic with write or writeWithoutResponse property
    */
   private async findWriteCharacteristic(server: any): Promise<any> {
+    // 1. Try iterating through all primary services
     try {
       const services = await server.getPrimaryServices();
       for (const service of services) {
@@ -221,33 +330,38 @@ class BluetoothPrinterService {
         }
       }
     } catch {
-      // If getPrimaryServices fails, attempt standard printer service lookup
-      for (const serviceUuid of PRINTER_SERVICES) {
-        try {
-          const service = await server.getPrimaryService(serviceUuid);
+      // Primary services scan might be restricted, fallback to direct known UUID lookups
+    }
+
+    // 2. Fallback to querying known printer service UUIDs directly
+    for (const serviceUuid of PRINTER_SERVICES) {
+      try {
+        const service = await server.getPrimaryService(serviceUuid);
+        if (service) {
           const characteristics = await service.getCharacteristics();
           for (const char of characteristics) {
             if (char.properties.write || char.properties.writeWithoutResponse) {
               return char;
             }
           }
-        } catch {
-          // continue
         }
+      } catch {
+        // continue
       }
     }
+
     return null;
   }
 
   /**
-   * Send binary data in small chunks (e.g. 100 bytes) with a small delay to avoid buffer overflow
+   * Send binary data in small chunks (e.g. 64-100 bytes) with a small delay to avoid buffer overflow
    */
   public async sendData(data: Uint8Array): Promise<boolean> {
     if (!this.writeCharacteristic) {
       throw new Error('Printer Bluetooth belum terhubung.');
     }
 
-    const chunkSize = 100;
+    const chunkSize = 64; // safe MTU size for all thermal printer brands
     const totalChunks = Math.ceil(data.length / chunkSize);
 
     for (let i = 0; i < totalChunks; i++) {
@@ -255,15 +369,24 @@ class BluetoothPrinterService {
       const end = Math.min(start + chunkSize, data.length);
       const chunk = data.slice(start, end);
 
-      if (this.writeCharacteristic.writeValueWithoutResponse) {
-        await this.writeCharacteristic.writeValueWithoutResponse(chunk);
-      } else {
-        await this.writeCharacteristic.writeValue(chunk);
+      try {
+        if (this.writeCharacteristic.writeValueWithoutResponse) {
+          await this.writeCharacteristic.writeValueWithoutResponse(chunk);
+        } else if (this.writeCharacteristic.writeValue) {
+          await this.writeCharacteristic.writeValue(chunk);
+        }
+      } catch (writeErr) {
+        // Retry with standard writeValue if writeWithoutResponse failed
+        if (this.writeCharacteristic.writeValue) {
+          await this.writeCharacteristic.writeValue(chunk);
+        } else {
+          throw writeErr;
+        }
       }
 
-      // Small pause between chunks to give thermal buffer time to process
+      // Small pause between chunks to give printer buffer time to process
       if (i < totalChunks - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 25));
+        await new Promise((resolve) => setTimeout(resolve, 30));
       }
     }
 
@@ -363,7 +486,27 @@ class BluetoothPrinterService {
       return false;
     }
   }
+
+  /**
+   * Test print via RawBT App
+   */
+  public printTestViaRawBT(store: StoreProfile): boolean {
+    try {
+      const bytes = buildTestPrintEscPos(store, this.state.paperWidth);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+      window.location.href = `rawbt:base64,${base64}`;
+      return true;
+    } catch (err) {
+      console.error('RawBT test print error:', err);
+      return false;
+    }
+  }
 }
 
 // Global Singleton Instance
 export const bluetoothPrinter = new BluetoothPrinterService();
+
