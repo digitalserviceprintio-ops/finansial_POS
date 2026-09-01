@@ -81,11 +81,14 @@ export const ReceiptModal: React.FC = () => {
       )
       .join('\n');
 
-    let cashDetails = '';
+    let paymentDetails = '';
     if (trx.paymentMethod === 'Tunai' && trx.cashGiven) {
-      cashDetails = `\nTunai Diterima: ${formatCurrency(trx.cashGiven)}\nKembalian: ${formatCurrency(
+      paymentDetails = `\nTunai Diterima: ${formatCurrency(trx.cashGiven)}\nKembalian: ${formatCurrency(
         trx.change || 0
       )}`;
+    } else if (trx.paymentMethod === 'QRIS') {
+      const danaNum = storeProfile.qrisDanaNumber || '082186371356';
+      paymentDetails = `\nQRIS DANA No  : ${danaNum}\nStatus Bayar  : LUNAS OTOMATIS (ASPI/BI)`;
     }
 
     return `${storeProfile.branch ? storeProfile.branch.toUpperCase() : storeProfile.name.toUpperCase()}
@@ -103,10 +106,10 @@ ${subDivider}
 Subtotal  : ${formatCurrency(trx.subtotal)}
 Pajak(${Math.round((storeProfile.taxRate || 0.1) * 100)}%): ${formatCurrency(trx.tax)}
 TOTAL     : ${formatCurrency(trx.total)}
-Metode    : ${trx.paymentMethod}${cashDetails}
+Metode    : ${trx.paymentMethod === 'QRIS' ? 'QRIS DANA (E-Wallet)' : trx.paymentMethod}${paymentDetails}
 ${divider}
 Terima Kasih Atas Kunjungan Anda!
-FinansialPro UMKM POS System`;
+DelPOS • powered by AkuPos system`;
   };
 
   // Bluetooth Thermal ESC/POS Direct Print Handler
@@ -267,7 +270,7 @@ FinansialPro UMKM POS System`;
           <div class="text-center" style="font-size: 10px;">
             <div class="bold">TERIMA KASIH</div>
             <div>Struk resmi pembayaran POS</div>
-            <div style="font-size: 9px; margin-top: 4px; color: #555;">FinansialPro UMKM</div>
+            <div style="font-size: 9px; margin-top: 4px; color: #555;">DelPOS • powered by AkuPos</div>
           </div>
         </body>
         </html>
@@ -513,7 +516,7 @@ FinansialPro UMKM POS System`;
             <div className="text-center text-[10px] text-[#767680] space-y-1">
               <p className="font-bold uppercase">Terima Kasih Atas Kunjungan Anda!</p>
               <p>Struk ini sah sebagai bukti pembayaran resmi.</p>
-              <p className="font-mono text-[9px] pt-1">Powered by FinansialPro UMKM</p>
+              <p className="font-mono text-[9px] pt-1">DelPOS • powered by AkuPos system</p>
             </div>
           </div>
 

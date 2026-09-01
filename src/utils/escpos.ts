@@ -1,4 +1,4 @@
-import { Transaction, StoreProfile } from '../types';
+import { Transaction, StoreProfile, CustomerOrder } from '../types';
 
 export type PaperWidth = '58mm' | '80mm';
 
@@ -210,6 +210,14 @@ export function buildReceiptEscPos(
       .bold(true)
       .row('Kembalian', formatRupiah(trx.change || 0), maxCols)
       .bold(false);
+  } else if (trx.paymentMethod === 'Transfer Bank') {
+    encoder
+      .row('Jenis Transaksi', 'Transfer Bank', maxCols)
+      .row('Status Bayar', 'LUNAS (TERVERIFIKASI)', maxCols);
+  } else if (trx.paymentMethod === 'Kartu Debit') {
+    encoder
+      .row('Jenis Transaksi', 'Kartu Debit / EDC', maxCols)
+      .row('Status Bayar', 'LUNAS (EDC SETTLED)', maxCols);
   }
 
   encoder.divider('=', maxCols);
@@ -221,7 +229,7 @@ export function buildReceiptEscPos(
     .line('TERIMA KASIH ATAS KUNJUNGAN ANDA!')
     .bold(false)
     .line('Barang yang dibeli tidak dapat ditukar.')
-    .line('FinansialPro POS System')
+    .line('DelPOS (powered by AkuPos)')
     .feed(3)
     .cut();
 
@@ -258,7 +266,117 @@ export function buildTestPrintEscPos(
     .divider('-', maxCols)
     .align('center')
     .line('Koneksi Bluetooth Berfungsi Optimal!')
-    .line('FinansialPro Siap Mencetak Struk.')
+    .line('DelPOS Siap Mencetak Struk.')
+    .feed(3)
+    .cut();
+
+  return encoder.encode();
+}
+
+/**
+ * Builds ESC/POS thermal payload for Order Queue Receipt (Struk Antrian Pesanan Ritel)
+ */
+export function buildQueueOrderTicketEscPos(
+  order: CustomerOrder,
+  store: StoreProfile,
+  paperWidth: PaperWidth = '58mm'
+): Uint8Array {
+  const maxCols = paperWidth === '58mm' ? 32 : 48;
+  const encoder = new EscPosEncoder();
+  const dateStr = new Date(order.orderTimestamp).toLocaleDateString('id-ID');
+
+  // Header
+  encoder
+    .init()
+    .align('center')
+    .bold(true)
+    .size(2, 2)
+    .line(store.name.toUpperCase())
+    .size(1, 1)
+    .bold(false)
+    .line(store.branch ? `(${store.branch})` : 'STRUK ANTRIAN PESANAN')
+    .line(store.address || 'Indonesia')
+    .line(`Telp: ${store.phone || '-'}`)
+    .divider('=', maxCols);
+
+  // Big Queue Number
+  encoder
+    .align('center')
+    .line('*** NOMOR ANTRIAN ***')
+    .bold(true)
+    .size(2, 2)
+    .line(`[ #${order.queueNumber} ]`)
+    .size(1, 1)
+    .bold(false)
+    .line(order.tableOrRoom ? order.tableOrRoom.toUpperCase() : 'DINE IN')
+    .divider('=', maxCols);
+
+  // Metadata
+  encoder
+    .align('left')
+    .row('No. Order', order.id, maxCols)
+    .row('Tanggal', dateStr, maxCols)
+    .row('Waktu', order.orderTime, maxCols)
+    .row('Pelanggan', order.customerName, maxCols);
+
+  if (order.customerPhone) {
+    encoder.row('No. HP', order.customerPhone, maxCols);
+  }
+
+  encoder
+    .row('Layanan', order.source === 'QR_CATALOG' ? 'Self-Order QR' : 'Kasir POS', maxCols)
+    .divider('-', maxCols);
+
+  // Items List
+  encoder.bold(true).line('DAFTAR PESANAN:').bold(false);
+
+  order.items.forEach((item) => {
+    // Line 1: Product name
+    encoder.line(item.productName);
+    // Line 2: Qty x Unit Price = Subtotal
+    const qtyPrice = `  ${item.quantity} x ${formatRupiah(item.price)}`;
+    const lineTotal = formatRupiah(item.price * item.quantity);
+    encoder.row(qtyPrice, lineTotal, maxCols);
+
+    // Notes if any
+    if (item.notes && item.notes.trim()) {
+      encoder.line(`  * Note: ${item.notes.trim()}`);
+    }
+  });
+
+  encoder.divider('-', maxCols);
+
+  // Totals
+  encoder
+    .row('Subtotal', formatRupiah(order.subtotal), maxCols)
+    .row(`Pajak (${Math.round((store.taxRate || 0.1) * 100)}%)`, formatRupiah(order.tax), maxCols);
+
+  // Grand Total in Bold Large
+  encoder
+    .bold(true)
+    .size(1, 2)
+    .row('TOTAL', formatRupiah(order.total), maxCols)
+    .size(1, 1)
+    .bold(false);
+
+  encoder.divider('-', maxCols);
+
+  // Payment Status
+  encoder
+    .row('Metode Bayar', order.paymentMethod.toUpperCase(), maxCols)
+    .row('Status Bayar', order.isPaid ? 'LUNAS' : 'BELUM LUNAS (KASIR)', maxCols);
+
+  encoder.divider('=', maxCols);
+
+  // Footer Instructions
+  encoder
+    .align('center')
+    .bold(true)
+    .line('*** SIMPAN STRUK INI ***')
+    .line('NOMOR ANDA AKAN DIPANGGIL')
+    .bold(false)
+    .line('Terima kasih telah berkunjung!')
+    .line('DelPOS • powered by AkuPos')
     .feed(3)
     .cut();
 

@@ -279,9 +279,9 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onExitSuperAdmin
           year: 'numeric',
         });
 
-    const msg = `*KONFIRMASI AKTIVASI SOFTWARE POS FINANSIALPRO* 🚀\n\n` +
+    const msg = `*KONFIRMASI AKTIVASI SOFTWARE POS DELPOS* 🚀\n\n` +
       `Halo *${lic.clientName}* (${lic.businessName}),\n` +
-      `Terima kasih telah mempercayakan operasional kasir bisnis Anda kepada FinansialPro POS.\n\n` +
+      `Terima kasih telah mempercayakan operasional kasir bisnis Anda kepada DelPOS (powered by AkuPos).\n\n` +
       `Berikut adalah Kunci Serial Lisensi Resmi Anda:\n` +
       `🔑 *KUNCI SERIAL:* \`${lic.licenseKey}\`\n` +
       `📦 *Paket:* ${lic.tier} Edition\n` +
@@ -289,7 +289,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onExitSuperAdmin
       `💰 *Total Investasi:* ${formatCurrency(lic.price)}\n\n` +
       `*Cara Aktivasi di Aplikasi:* Buka Menu Pengaturan ➔ Lisensi Software ➔ Masukkan Kunci Serial di atas ➔ Klik Aktivasi.\n\n` +
       `_Salam Sukses,_\n` +
-      `*FinansialPro Developer Team*`;
+      `*DelPOS Developer Team*`;
 
     const phoneClean = (lic.clientPhone || '').replace(/[^0-9]/g, '');
     const waUrl = phoneClean
@@ -307,15 +307,15 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onExitSuperAdmin
       : 'Hari Ini';
 
     const msg = isExpired
-      ? `*PEMBERITAHUAN MASA LISENSI FINANSIALPRO BERAKHIR* ⚠️\n\n` +
+      ? `*PEMBERITAHUAN MASA LISENSI DELPOS BERAKHIR* ⚠️\n\n` +
         `Yth. *${lic.clientName}* (${lic.businessName}),\n` +
-        `Kami menginformasikan bahwa lisensi software kasir FinansialPro (${lic.tier} Edition) untuk toko Anda telah *kadaluarsa pada ${expiryDateStr}*.\n\n` +
+        `Kami menginformasikan bahwa lisensi software kasir DelPOS (${lic.tier} Edition) untuk toko Anda telah *kadaluarsa pada ${expiryDateStr}*.\n\n` +
         `Untuk memastikan transaksi kasir tetap berjalan tanpa kendala, silakan hubungi kami untuk perpanjangan lisensi.\n` +
         `🔑 Serial Terdaftar: \`${lic.licenseKey}\`\n\n` +
         `Terima kasih atas kerja samanya.`
-      : `*PENGINGAT JATUH TEMPO LISENSI FINANSIALPRO* ⏳\n\n` +
+      : `*PENGINGAT JATUH TEMPO LISENSI DELPOS* ⏳\n\n` +
         `Yth. *${lic.clientName}* (${lic.businessName}),\n` +
-        `Lisensi software kasir FinansialPro (${lic.tier} Edition) untuk toko Anda akan *jatuh tempo dalam ${daysLeft} hari* (pada ${expiryDateStr}).\n\n` +
+        `Lisensi software kasir DelPOS (${lic.tier} Edition) untuk toko Anda akan *jatuh tempo dalam ${daysLeft} hari* (pada ${expiryDateStr}).\n\n` +
         `Dapatkan promo perpanjangan hemat sekarang agar operasional toko tetap lancar.\n` +
         `🔑 Serial: \`${lic.licenseKey}\`\n\n` +
         `Terima kasih.`;
@@ -682,7 +682,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onExitSuperAdmin
               Super Admin Gateway
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              FinansialPro POS Master Licensing & Fleet Control
+              DelPOS POS Master Licensing & Fleet Control
             </p>
           </div>
 

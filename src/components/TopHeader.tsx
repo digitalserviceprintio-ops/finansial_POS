@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Menu,
   Search,
@@ -18,11 +18,14 @@ import {
   Trash2,
   Clock,
   Sparkles,
+  ShoppingCart,
+  Zap,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DigitalClockAndCalendar } from './DigitalClockAndCalendar';
 import { BluetoothPrinterModal } from './modals/BluetoothPrinterModal';
 import { InAppNotification } from '../types';
+import { DelPOSLogo } from './brand/DelPOSLogo';
 
 export const TopHeader: React.FC = () => {
   const {
@@ -33,8 +36,10 @@ export const TopHeader: React.FC = () => {
     storeProfile,
     cashierName,
     currentUser,
+    currentTab,
     setCurrentTab,
     products,
+    cart,
     transactions,
     latestSimulatedEmail,
     setIsEmailModalOpen,
@@ -51,6 +56,18 @@ export const TopHeader: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifFilter, setNotifFilter] = useState<'all' | 'stock' | 'system'>('all');
   const [isBtModalOpen, setIsBtModalOpen] = useState(false);
+
+  // Global F4 shortcut to quickly jump to POS / Cashier
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F4') {
+        e.preventDefault();
+        setCurrentTab('pos');
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [setCurrentTab]);
 
   // Filtered notifications
   const filteredNotifs = notifications.filter((n) => {
@@ -83,17 +100,15 @@ export const TopHeader: React.FC = () => {
             <Menu className="h-5 w-5" />
           </button>
           
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-[#4648d4] to-[#797bff] text-white shadow-sm shrink-0">
-              <Store className="h-5 w-5" />
-            </div>
+          <div className="flex items-center gap-2.5">
+            <DelPOSLogo variant="compact" size="md" showPoweredBy={false} />
+            <div className="hidden xl:block h-6 w-px bg-slate-200" />
             <div className="hidden sm:block">
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold tracking-tight text-[#1b1b23] text-base leading-none">FinansialPro</span>
-                <span className="rounded bg-[#ebeaff] px-1.5 py-0.5 text-[10px] font-semibold text-[#4648d4]">UMKM</span>
-              </div>
-              <p className="text-[11px] text-[#767680] font-medium leading-tight mt-0.5 truncate max-w-[140px] md:max-w-[200px]">
-                {storeProfile.branch || storeProfile.name}
+              <p className="text-xs font-bold text-[#1b1b23] leading-none truncate max-w-[140px] md:max-w-[200px]">
+                {storeProfile.name}
+              </p>
+              <p className="text-[10px] text-[#767680] font-medium leading-tight mt-0.5 truncate max-w-[140px] md:max-w-[200px]">
+                {storeProfile.branch ? `Cabang ${storeProfile.branch}` : 'powered by AkuPos'}
               </p>
             </div>
           </div>
@@ -124,6 +139,29 @@ export const TopHeader: React.FC = () => {
 
         {/* Right section: Controls, Notifications & Profile */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
+          {/* Akses Cepat Transaksi Penjualan / Kasir POS (F4) */}
+          <button
+            id="header-quick-pos-btn"
+            onClick={() => setCurrentTab('pos')}
+            className={`flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-bold transition-all shadow-xs cursor-pointer ${
+              currentTab === 'pos'
+                ? 'bg-[#ebeaff] text-[#4648d4] ring-2 ring-[#4648d4]/30'
+                : 'bg-gradient-to-r from-[#4648d4] to-[#3435ad] text-white hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
+            }`}
+            title="Akses Cepat Transaksi Penjualan / Kasir (F4)"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            <span className="hidden sm:inline">Kasir POS</span>
+            {cart.length > 0 && (
+              <span className="inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500 text-white">
+                {cart.reduce((a, c) => a + c.quantity, 0)}
+              </span>
+            )}
+            <span className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-white/20 text-white">
+              F4
+            </span>
+          </button>
+
           {/* Real-time Digital Clock & Interactive Calendar */}
           <DigitalClockAndCalendar />
 
@@ -349,7 +387,7 @@ export const TopHeader: React.FC = () => {
                     <Package className="h-3.5 w-3.5 text-indigo-600" />
                     <span>Kelola Master Produk</span>
                   </button>
-                  <span className="text-[10px] text-slate-400">FinansialPro POS UMKM</span>
+                  <span className="text-[10px] text-slate-400">DelPOS powered by AkuPos</span>
                 </div>
               </div>
             )}

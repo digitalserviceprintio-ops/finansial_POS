@@ -57,7 +57,7 @@ export const BackupView: React.FC = () => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupObj, null, 2));
     const now = new Date();
     const timestampStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-    const filename = `FinansialPro_Backup_${storeProfile.name.replace(/\s+/g, '_')}_${timestampStr}.json`;
+    const filename = `DelPOS_Backup_${storeProfile.name.replace(/\s+/g, '_')}_${timestampStr}.json`;
 
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
@@ -72,7 +72,7 @@ export const BackupView: React.FC = () => {
   // Handle Export Transactions Only
   const handleDownloadTransactionsOnly = () => {
     const backupObj = {
-      app: 'FinansialPro UMKM',
+      app: 'DelPOS',
       type: 'transactions_only',
       version: '1.2.0',
       exportedAt: new Date().toISOString(),
@@ -91,7 +91,7 @@ export const BackupView: React.FC = () => {
 
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupObj, null, 2));
     const now = new Date();
-    const filename = `FinansialPro_Transaksi_${now.toISOString().slice(0, 10)}.json`;
+    const filename = `DelPOS_Transaksi_${now.toISOString().slice(0, 10)}.json`;
 
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
@@ -106,7 +106,7 @@ export const BackupView: React.FC = () => {
   // Handle Export Products Only
   const handleDownloadProductsOnly = () => {
     const backupObj = {
-      app: 'FinansialPro UMKM',
+      app: 'DelPOS',
       type: 'products_only',
       version: '1.2.0',
       exportedAt: new Date().toISOString(),
@@ -123,7 +123,7 @@ export const BackupView: React.FC = () => {
 
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupObj, null, 2));
     const now = new Date();
-    const filename = `FinansialPro_MasterProduk_${now.toISOString().slice(0, 10)}.json`;
+    const filename = `DelPOS_MasterProduk_${now.toISOString().slice(0, 10)}.json`;
 
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
@@ -164,13 +164,13 @@ export const BackupView: React.FC = () => {
 
         // Basic validation
         if (!parsed || typeof parsed !== 'object' || (!parsed.data && !parsed.products && !parsed.transactions)) {
-          setParseError('Format file tidak valid. Pastikan file adalah format JSON cadangan FinansialPro.');
+          setParseError('Format file tidak valid. Pastikan file adalah format JSON cadangan DelPOS.');
           return;
         }
 
         // Normalize if old format or partial format
         const normalizedData: BackupData = {
-          app: parsed.app || 'FinansialPro UMKM',
+          app: parsed.app || 'DelPOS',
           version: parsed.version || '1.2.0',
           exportedAt: parsed.exportedAt || new Date().toISOString(),
           exportedTimestamp: parsed.exportedTimestamp || Date.now(),
@@ -447,7 +447,7 @@ export const BackupView: React.FC = () => {
                   Klik untuk pilih file <span className="text-[#4648d4]">.JSON</span> atau drag & drop ke sini
                 </p>
                 <p className="text-[10px] text-[#767680] mt-0.5">
-                  Mendukung file cadangan resmi FinansialPro UMKM
+                  Mendukung file cadangan resmi DelPOS & AkuPos
                 </p>
               </div>
             </div>

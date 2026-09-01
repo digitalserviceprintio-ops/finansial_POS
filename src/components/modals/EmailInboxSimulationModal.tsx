@@ -71,12 +71,12 @@ export const EmailInboxSimulationModal: React.FC = () => {
           <div className="bg-white p-4 rounded-2xl border border-[#e2e1ec] shadow-2xs space-y-2">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#4648d4] text-white font-bold text-sm shadow-xs">
-                  FP
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0055EE] to-[#003B99] text-white font-black text-xs shadow-xs">
+                  DP
                 </div>
                 <div>
                   <h4 className="text-xs font-extrabold text-[#1b1b23]">
-                    FinansialPro UMKM Security &lt;auth@finansialpro.id&gt;
+                    DelPOS Security &lt;auth@delpos.id&gt;
                   </h4>
                   <p className="text-[11px] text-[#767680]">
                     Kepada: <strong className="text-[#1b1b23]">{latestSimulatedEmail.to}</strong>
@@ -98,12 +98,12 @@ export const EmailInboxSimulationModal: React.FC = () => {
           <div className="bg-white rounded-2xl border border-[#d2d1dc] p-6 shadow-sm space-y-5">
             {/* Brand Logo inside email */}
             <div className="flex items-center gap-2 pb-4 border-b border-[#f3f2fa]">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#4648d4] to-[#2e2f9d] text-white">
-                <Store className="h-4 w-4" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#0055EE] to-[#003B99] text-white font-black text-xs">
+                DP
               </div>
               <div>
-                <span className="font-extrabold text-sm text-[#1b1b23]">FinansialPro UMKM</span>
-                <p className="text-[10px] text-[#767680]">Sistem Kasir POS & Pembukuan Keuangan Digital</p>
+                <span className="font-extrabold text-sm text-[#1b1b23]">DelPOS</span>
+                <p className="text-[10px] text-[#767680]">powered by AkuPos system</p>
               </div>
             </div>
 
@@ -112,7 +112,7 @@ export const EmailInboxSimulationModal: React.FC = () => {
                 Halo Pemilik Usaha,
               </h3>
               <p className="text-xs text-[#46464f] leading-relaxed">
-                Terima kasih telah mendaftar di FinansialPro UMKM. Gunakan kode verifikasi di bawah ini untuk mengonfirmasi email dan mengaktifkan akun sistem kasir & pembukuan Anda:
+                Terima kasih telah mendaftar di DelPOS (powered by AkuPos). Gunakan kode verifikasi di bawah ini untuk mengonfirmasi email dan mengaktifkan akun sistem kasir & pembukuan Anda:
               </p>
             </div>
 
@@ -146,7 +146,7 @@ export const EmailInboxSimulationModal: React.FC = () => {
             <div className="space-y-1.5 text-[11px] text-[#767680] pt-2 border-t border-[#f3f2fa]">
               <div className="flex items-center gap-1.5 text-emerald-700">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                <span className="font-semibold">Email Resmi Terenkripsi FinansialPro UMKM</span>
+                <span className="font-semibold">Email Resmi Terenkripsi DelPOS • powered by AkuPos</span>
               </div>
               <p>Jika Anda tidak merasa melakukan pendaftaran ini, abaikan email ini secara aman.</p>
             </div>

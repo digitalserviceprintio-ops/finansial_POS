@@ -8,7 +8,7 @@
  */
 
 // Helper to hash passwords securely using Web Crypto
-export async function hashPassword(password: string, salt: string = 'FinansialPro_Secure_Salt_2026'): Promise<string> {
+export async function hashPassword(password: string, salt: string = 'DelPOS_Secure_Salt_2026'): Promise<string> {
   try {
     const encoder = new TextEncoder();
     const data = encoder.encode(password + salt);
@@ -270,7 +270,7 @@ export const SecureVault = {
 
     const backupPkg: MasterBackupPackage = {
       version: '3.0.0-PRO-ENTERPRISE',
-      systemName: 'FinansialPro POS - Multi-Tenant Master Fleet Backup',
+      systemName: 'DelPOS - Multi-Tenant Master Fleet Backup (powered by AkuPos)',
       createdAt: new Date().toISOString(),
       backupType: 'SUPER_ADMIN_MASS_FLEET_BACKUP',
       tenantCount: tenants.length,
@@ -281,7 +281,7 @@ export const SecureVault = {
       masterLicenses,
       registeredUsers,
       tenants,
-      integrityChecksum: `FPRO-MASS-CRC-${Math.random().toString(36).substring(2, 9).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
+      integrityChecksum: `DELPOS-MASS-CRC-${Math.random().toString(36).substring(2, 9).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
     };
 
     return backupPkg;

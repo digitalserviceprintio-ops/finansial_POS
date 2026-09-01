@@ -91,7 +91,7 @@ export const LicenseExpirationAlert: React.FC = () => {
 
             <a
               href={`https://wa.me/?text=${encodeURIComponent(
-                `Halo Tim FinansialPro, saya ingin memperpanjang lisensi toko: ${currentLicense.businessName} (Serial: ${currentLicense.licenseKey})`
+                `Halo Tim DelPOS, saya ingin memperpanjang lisensi toko: ${currentLicense.businessName} (Serial: ${currentLicense.licenseKey})`
               )}`}
               target="_blank"
               rel="noreferrer"

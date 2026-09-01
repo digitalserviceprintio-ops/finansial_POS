@@ -182,7 +182,7 @@ export const AuditLogger = {
     const logs = this.getLogs();
     const exportData = {
       exportedAt: new Date().toISOString(),
-      system: 'FinansialPro POS Super Admin Audit Vault',
+      system: 'DelPOS Super Admin Audit Vault (powered by AkuPos)',
       totalRecords: logs.length,
       logs,
     };
@@ -191,7 +191,7 @@ export const AuditLogger = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `FINANSIALPRO_SUPERADMIN_AUDIT_LOG_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `DELPOS_SUPERADMIN_AUDIT_LOG_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

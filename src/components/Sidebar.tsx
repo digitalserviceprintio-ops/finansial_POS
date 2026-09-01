@@ -15,9 +15,12 @@ import {
   Sparkles,
   ChevronRight,
   TrendingUp,
+  ChefHat,
+  QrCode,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { MainTab } from '../types';
+import { DelPOSLogo } from './brand/DelPOSLogo';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -30,10 +33,15 @@ export const Sidebar: React.FC = () => {
     categories,
     customers,
     transactions,
+    customerOrders,
+    setIsCatalogQRModalOpen,
     logoutUser,
   } = useApp();
 
   const lowStockCount = products.filter((p) => p.stock <= (p.minStockAlert ?? 5)).length;
+  const activeOrdersCount = customerOrders.filter(
+    (o) => o.status === 'MENUNGGU' || o.status === 'DIPROSES'
+  ).length;
 
   const navItems: { id: MainTab; label: string; icon: React.FC<{ className?: string }>; badge?: string; badgeColor?: string }[] = [
     {
@@ -47,6 +55,20 @@ export const Sidebar: React.FC = () => {
       icon: ShoppingCart,
       badge: cart.length > 0 ? `${cart.reduce((a, c) => a + c.quantity, 0)} item` : 'Kasir',
       badgeColor: cart.length > 0 ? 'bg-[#ba1a1a] text-white' : 'bg-[#ebeaff] text-[#4648d4]',
+    },
+    {
+      id: 'orders',
+      label: 'Antrian Pesanan',
+      icon: ChefHat,
+      badge: activeOrdersCount > 0 ? `${activeOrdersCount} antri` : 'Live',
+      badgeColor: activeOrdersCount > 0 ? 'bg-amber-500 text-slate-950 font-black' : 'bg-emerald-100 text-emerald-800',
+    },
+    {
+      id: 'customer_catalog',
+      label: 'Katalog QR Mandiri',
+      icon: QrCode,
+      badge: 'Scan HP',
+      badgeColor: 'bg-purple-100 text-purple-800',
     },
     {
       id: 'transactions',
@@ -138,7 +160,7 @@ export const Sidebar: React.FC = () => {
               <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold">Aktif</span>
             </div>
             <p className="mt-2 text-xs text-[#ebeaff]/90 leading-relaxed">
-              Layani pembeli dengan transaksi kilat & QRIS otomatis.
+              Layani pembeli dengan transaksi kilat, scan barcode, & QR katalog antrian.
             </p>
             <button
               id="open-pos-quick-btn"
@@ -214,6 +236,12 @@ export const Sidebar: React.FC = () => {
               </div>
             </div>
             <ChevronRight className="h-3.5 w-3.5 text-[#767680]" />
+          </div>
+
+          {/* DelPOS Brand Card in Sidebar */}
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 mb-2 flex items-center justify-between">
+            <DelPOSLogo variant="compact" size="sm" showPoweredBy={true} />
+            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">v1.2.0</span>
           </div>
 
           <div className="space-y-1">

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Store, UserCheck, ShieldCheck, ArrowRight, Lock } from 'lucide-react';
+import { UserCheck, ShieldCheck, ArrowRight, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { DelPOSLogo } from '../components/brand/DelPOSLogo';
 
 export const LoginModal: React.FC = () => {
   const { storeProfile, setCurrentTab, setCashierName, cashierName, showToast } = useApp();
@@ -29,7 +30,7 @@ export const LoginModal: React.FC = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setCashierName(selectedUser);
-    showToast(`Selamat datang kembali, ${selectedUser}!`, 'success');
+    showToast(`Selamat datang kembali di DelPOS, ${selectedUser}!`, 'success');
     setCurrentTab('dashboard');
   };
 
@@ -43,13 +44,10 @@ export const LoginModal: React.FC = () => {
     <div id="login-view" className="flex min-h-[80vh] items-center justify-center p-4">
       <div className="w-full max-w-md rounded-3xl border border-[#e2e1ec] bg-white p-6 sm:p-8 shadow-xl space-y-6">
         {/* Brand Icon & Heading */}
-        <div className="text-center space-y-2">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4648d4] to-[#2e2f9d] text-white shadow-md">
-            <Store className="h-7 w-7" />
-          </div>
-          <h2 className="text-2xl font-extrabold text-[#1b1b23] tracking-tight">FinansialPro UMKM</h2>
-          <p className="text-xs text-[#767680]">
-            Pilih kasir bertugas untuk membuka sesi kasir {storeProfile.branch}
+        <div className="text-center space-y-2 flex flex-col items-center">
+          <DelPOSLogo variant="full" size="lg" showPoweredBy={true} />
+          <p className="text-xs text-[#767680] mt-1">
+            Pilih kasir bertugas untuk membuka sesi kasir {storeProfile.branch || storeProfile.name}
           </p>
         </div>
 

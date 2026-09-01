@@ -28,6 +28,8 @@ import {
   Copy,
   Check,
   ExternalLink,
+  QrCode,
+  Smartphone,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -35,6 +37,7 @@ import {
   BluetoothPrinterState,
 } from '../utils/bluetoothPrinter';
 import { BluetoothPrinterModal } from '../components/modals/BluetoothPrinterModal';
+import { generateQRISString, generateQRCodeDataURL } from '../utils/qrisGenerator';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -57,6 +60,9 @@ export const SettingsView: React.FC = () => {
     address: storeProfile.address,
     taxRate: storeProfile.taxRate * 100,
     avatarUrl: storeProfile.avatarUrl,
+    qrisDanaNumber: storeProfile.qrisDanaNumber || '082186371356',
+    qrisMerchantName: storeProfile.qrisMerchantName || storeProfile.name || 'SOLUSI UMKM / FINANSIALPRO',
+    qrisNmid: storeProfile.qrisNmid || 'ID1020021863713',
   });
 
   const [currentCashier, setCurrentCashier] = useState(cashierName);
@@ -64,6 +70,19 @@ export const SettingsView: React.FC = () => {
   const [btState, setBtState] = useState<BluetoothPrinterState>(
     bluetoothPrinter.getState()
   );
+  const [qrisPreviewUrl, setQrisPreviewUrl] = useState<string>('');
+
+  // Live generate test QRIS preview
+  useEffect(() => {
+    const qrisString = generateQRISString({
+      danaNumber: formData.qrisDanaNumber,
+      merchantName: formData.qrisMerchantName,
+      nmid: formData.qrisNmid,
+    });
+    generateQRCodeDataURL(qrisString, { width: 200, margin: 1 }).then((url) => {
+      if (url) setQrisPreviewUrl(url);
+    });
+  }, [formData.qrisDanaNumber, formData.qrisMerchantName, formData.qrisNmid]);
 
   // License Activation State
   const [activationKeyInput, setActivationKeyInput] = useState('');
@@ -104,7 +123,7 @@ export const SettingsView: React.FC = () => {
     const backupObj = exportBackupJson();
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupObj, null, 2));
     const now = new Date();
-    const filename = `FinansialPro_Backup_${storeProfile.name.replace(/\s+/g, '_')}_${now.toISOString().slice(0, 10)}.json`;
+    const filename = `DelPOS_Backup_${storeProfile.name.replace(/\s+/g, '_')}_${now.toISOString().slice(0, 10)}.json`;
 
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
@@ -149,9 +168,12 @@ export const SettingsView: React.FC = () => {
       address: formData.address,
       taxRate: formData.taxRate / 100,
       avatarUrl: formData.avatarUrl,
+      qrisDanaNumber: formData.qrisDanaNumber,
+      qrisMerchantName: formData.qrisMerchantName,
+      qrisNmid: formData.qrisNmid,
     });
     setCashierName(currentCashier);
-    showToast('Pengaturan toko & kasir berhasil disimpan!', 'success');
+    showToast('Pengaturan toko, QRIS DANA, & kasir berhasil disimpan!', 'success');
   };
 
   return (
@@ -627,6 +649,132 @@ export const SettingsView: React.FC = () => {
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#767680]">%</span>
               </div>
               <p className="text-[10px] text-[#767680] mt-1">Standar PPN Resto / PB1 adalah 10%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Integrasi QRIS & E-Wallet DANA */}
+        <div className="bg-gradient-to-br from-sky-50/90 via-white to-indigo-50/50 p-6 rounded-3xl border border-sky-200/90 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-sky-100">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#118eea] text-white shadow-md font-black text-sm">
+                <QrCode className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-extrabold text-[#1b1b23]">
+                    Integrasi Barcode QRIS & Nomor Akun DANA
+                  </h3>
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-100 px-2 py-0.5 rounded-full border border-sky-200">
+                    <CheckCircle2 className="h-3 w-3 text-sky-600" />
+                    <span>Support QRIS ASPI</span>
+                  </span>
+                </div>
+                <p className="text-xs text-[#767680] mt-0.5">
+                  Nomor DANA terhubung otomatis dengan format QRIS dinamis untuk menerima pembayaran dari seluruh e-wallet & mobile banking.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 self-start sm:self-auto">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Zero-Data Stored (Aman)</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+            {/* Input Form Column */}
+            <div className="lg:col-span-2 space-y-4">
+              <div>
+                <label className="block text-xs font-extrabold text-[#1b1b23] mb-1">
+                  Nomor DANA Penerima Pembayaran QRIS
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#118eea]">
+                    DANA:
+                  </span>
+                  <input
+                    type="text"
+                    value={formData.qrisDanaNumber}
+                    onChange={(e) => setFormData({ ...formData, qrisDanaNumber: e.target.value })}
+                    placeholder="Contoh: 082186371356"
+                    className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] p-2.5 pl-16 text-xs font-mono font-bold text-[#1b1b23] focus:border-[#118eea] focus:bg-white focus:outline-none"
+                    required
+                  />
+                </div>
+                <p className="text-[10px] text-[#767680] mt-1">
+                  Nomor aktif DANA saat ini: <strong className="text-[#118eea] font-mono">{formData.qrisDanaNumber}</strong>
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-extrabold text-[#1b1b23] mb-1">
+                    Nama Merchant QRIS (Max 25 Huruf)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={25}
+                    value={formData.qrisMerchantName}
+                    onChange={(e) => setFormData({ ...formData, qrisMerchantName: e.target.value.toUpperCase() })}
+                    className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] p-2.5 text-xs font-bold text-[#1b1b23] focus:border-[#118eea] focus:bg-white focus:outline-none uppercase"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-extrabold text-[#1b1b23] mb-1">
+                    NMID QRIS (National Merchant ID)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.qrisNmid}
+                    onChange={(e) => setFormData({ ...formData, qrisNmid: e.target.value })}
+                    className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] p-2.5 text-xs font-mono font-bold text-[#1b1b23] focus:border-[#118eea] focus:bg-white focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Security & Privacy Notice */}
+              <div className="p-3 rounded-2xl bg-white border border-sky-100 text-[11px] text-slate-600 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  <span>Keamanan Data & Privasi Terjamin</span>
+                </div>
+                <p className="leading-relaxed">
+                  Aplikasi ini <strong>tidak pernah meminta atau menyimpan PIN, password, OTP, atau data sensitif bank/kartu</strong>. Barcode QRIS dienkripsi secara lokal di perangkat kasir sesuai regulasi Bank Indonesia.
+                </p>
+              </div>
+            </div>
+
+            {/* Live QRIS Preview Column */}
+            <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white border border-sky-200 text-center shadow-xs">
+              <span className="text-[11px] font-extrabold text-sky-900 mb-2">
+                Preview Barcode QRIS DANA
+              </span>
+              <div className="h-36 w-36 bg-white p-1 rounded-xl border border-slate-200 shadow-inner flex items-center justify-center relative">
+                {qrisPreviewUrl ? (
+                  <img
+                    src={qrisPreviewUrl}
+                    alt="Preview Barcode QRIS"
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <RefreshCw className="h-5 w-5 animate-spin text-sky-600" />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="h-6 w-6 rounded bg-[#118eea] text-white flex items-center justify-center font-black text-[8px] shadow-sm">
+                    DANA
+                  </div>
+                </div>
+              </div>
+              <p className="text-[10px] font-mono font-extrabold text-slate-700 mt-2">
+                {formData.qrisDanaNumber}
+              </p>
+              <p className="text-[9px] text-slate-400">Siap di-scan di Kasir POS</p>
             </div>
           </div>
         </div>

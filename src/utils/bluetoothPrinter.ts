@@ -1,5 +1,10 @@
-import { Transaction, StoreProfile } from '../types';
-import { buildReceiptEscPos, buildTestPrintEscPos, PaperWidth } from './escpos';
+import { Transaction, StoreProfile, CustomerOrder } from '../types';
+import {
+  buildReceiptEscPos,
+  buildTestPrintEscPos,
+  buildQueueOrderTicketEscPos,
+  PaperWidth,
+} from './escpos';
 
 // Comprehensive Bluetooth Thermal Printer Service UUIDs
 // Covering standard POS, Chinese generic (ISSC, HM-10, Telink, Xprinter, Panda, Goojprt), Nordic UART, etc.
@@ -483,6 +488,62 @@ class BluetoothPrinterService {
       return true;
     } catch (err) {
       console.error('RawBT print error:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Print order queue ticket via connected Bluetooth printer
+   */
+  public async printCustomerOrder(
+    order: CustomerOrder,
+    store: StoreProfile
+  ): Promise<{ success: boolean; message: string }> {
+    if (!this.state.isConnected || !this.writeCharacteristic) {
+      return {
+        success: false,
+        message: 'Printer Bluetooth belum terhubung. Silakan hubungkan perangkat terlebih dahulu.',
+      };
+    }
+
+    try {
+      this.state.isPrinting = true;
+      this.notify();
+
+      const bytes = buildQueueOrderTicketEscPos(order, store, this.state.paperWidth);
+      await this.sendData(bytes);
+
+      this.state.isPrinting = false;
+      this.state.lastPrintTimestamp = Date.now();
+      this.notify();
+
+      return {
+        success: true,
+        message: `Struk antrian #${order.queueNumber} berhasil dicetak via Bluetooth!`,
+      };
+    } catch (err: any) {
+      this.state.isPrinting = false;
+      this.state.error = err.message || 'Gagal mencetak struk antrian.';
+      this.notify();
+      return { success: false, message: `Gagal mencetak: ${err.message}` };
+    }
+  }
+
+  /**
+   * Launch Android RawBT Print App for Queue Order Ticket
+   */
+  public printCustomerOrderViaRawBT(order: CustomerOrder, store: StoreProfile): boolean {
+    try {
+      const bytes = buildQueueOrderTicketEscPos(order, store, this.state.paperWidth);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+      window.location.href = `rawbt:base64,${base64}`;
+      return true;
+    } catch (err) {
+      console.error('RawBT queue print error:', err);
       return false;
     }
   }

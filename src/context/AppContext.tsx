@@ -14,6 +14,8 @@ import {
   BackupData,
   AppLicense,
   InAppNotification,
+  CustomerOrder,
+  CustomerOrderStatus,
 } from '../types';
 import {
   initialProducts,
@@ -22,6 +24,7 @@ import {
   initialCustomers,
   initialStoreProfile,
   initialCategories,
+  initialCustomerOrders,
 } from '../data/mockData';
 import { SecureVault, generateTenantId } from '../utils/security';
 import { LicenseManager } from '../utils/licenseManager';
@@ -156,6 +159,17 @@ interface AppContextType {
   setIsSuperAdminOpen: (open: boolean) => void;
   openSuperAdminPortal: () => void;
 
+  // Customer Self-Order & Queue System
+  customerOrders: CustomerOrder[];
+  addCustomerOrder: (
+    order: Omit<CustomerOrder, 'id' | 'queueNumber' | 'orderTime' | 'orderTimestamp' | 'status'>
+  ) => CustomerOrder;
+  updateCustomerOrderStatus: (orderId: string, status: CustomerOrderStatus, isPaid?: boolean) => void;
+  deleteCustomerOrder: (orderId: string) => void;
+  transferOrderToPOSCart: (order: CustomerOrder) => void;
+  isCatalogQRModalOpen: boolean;
+  setIsCatalogQRModalOpen: (open: boolean) => void;
+
   // Utilities
   formatCurrency: (amount: number) => string;
 }
@@ -268,9 +282,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Payment flow
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [pendingPaymentMethod, setPendingPaymentMethod] = useState<PaymentMethod>('QRIS');
+  const [pendingPaymentMethod, setPendingPaymentMethod] = useState<PaymentMethod>('Tunai');
   const [completedTransaction, setCompletedTransaction] = useState<Transaction | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+
+  // Customer Self-Order & Queue System
+  const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>(() => {
+    return SecureVault.getTenantItem<CustomerOrder[]>(currentTenantId, 'customer_orders', initialCustomerOrders);
+  });
+  const [isCatalogQRModalOpen, setIsCatalogQRModalOpen] = useState<boolean>(false);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -425,6 +445,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     SecureVault.setTenantItem(currentTenantId, 'customers', customers);
   }, [currentTenantId, customers]);
 
+  useEffect(() => {
+    SecureVault.setTenantItem(currentTenantId, 'customer_orders', customerOrders);
+  }, [currentTenantId, customerOrders]);
+
   const showToast = (
     message: string,
     type: 'success' | 'info' | 'warning' | 'error' = 'success'
@@ -487,7 +511,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date();
     const simulated: SimulatedEmail = {
       to: email,
-      subject: `Kode Verifikasi Akun FinansialPro UMKM: ${code}`,
+      subject: `Kode Verifikasi Akun DelPOS: ${code}`,
       code,
       sentAt: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} WIB`,
       previewText: `Gunakan kode OTP ${code} untuk memverifikasi akun usaha ${businessName}.`,
@@ -517,7 +541,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date();
     const simulated: SimulatedEmail = {
       to: email,
-      subject: `Kode Verifikasi Baru FinansialPro UMKM: ${code}`,
+      subject: `Kode Verifikasi Baru DelPOS: ${code}`,
       code,
       sentAt: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} WIB`,
       previewText: `Kode OTP baru Anda adalah ${code}.`,
@@ -664,7 +688,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const totalExp = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
     const backupObj: BackupData = {
-      app: 'FinansialPro UMKM',
+      app: 'DelPOS',
       version: '1.2.0',
       exportedAt: new Date().toISOString(),
       exportedTimestamp: Date.now(),
@@ -1103,6 +1127,123 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Status transaksi diperbarui menjadi "${status}"`, 'success');
   };
 
+  // Customer Self-Order Queue Handlers
+  const addCustomerOrder = (
+    orderData: Omit<CustomerOrder, 'id' | 'queueNumber' | 'orderTime' | 'orderTimestamp' | 'status'>
+  ): CustomerOrder => {
+    const todayOrdersCount = customerOrders.filter((o) => {
+      const d = new Date(o.orderTimestamp);
+      const now = new Date();
+      return d.toDateString() === now.toDateString();
+    }).length;
+
+    const queueNumber = `ANT-${String(todayOrdersCount + 1).padStart(3, '0')}`;
+    const now = new Date();
+    const orderTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} WIB`;
+    const uniqueId = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const newOrder: CustomerOrder = {
+      ...orderData,
+      id: uniqueId,
+      queueNumber,
+      orderTime,
+      orderTimestamp: Date.now(),
+      status: 'MENUNGGU',
+    };
+
+    setCustomerOrders((prev) => [newOrder, ...prev]);
+
+    // Send in-app notification for cashier
+    addCustomNotification({
+      title: `📢 Pesanan Masuk #${queueNumber} (${newOrder.customerName})`,
+      message: `${newOrder.items.length} menu dipesan via QR Katalog (${newOrder.tableOrRoom || 'Meja'}). Total: ${formatCurrency(newOrder.total)}`,
+      type: 'new_order',
+      urgency: 'critical',
+    });
+
+    return newOrder;
+  };
+
+  const updateCustomerOrderStatus = (
+    orderId: string,
+    status: CustomerOrderStatus,
+    isPaid?: boolean
+  ) => {
+    setCustomerOrders((prev) =>
+      prev.map((o) => {
+        if (o.id === orderId) {
+          return {
+            ...o,
+            status,
+            isPaid: isPaid !== undefined ? isPaid : o.isPaid,
+          };
+        }
+        return o;
+      })
+    );
+    showToast(`Status antrian diperbarui: ${status}`, 'success');
+  };
+
+  const deleteCustomerOrder = (orderId: string) => {
+    setCustomerOrders((prev) => prev.filter((o) => o.id !== orderId));
+    showToast('Pesanan berhasil dihapus dari antrian', 'info');
+  };
+
+  const transferOrderToPOSCart = (order: CustomerOrder) => {
+    const newCartItems: CartItem[] = [];
+    order.items.forEach((item) => {
+      const prod = products.find((p) => p.id === item.productId);
+      if (prod) {
+        newCartItems.push({
+          product: prod,
+          quantity: item.quantity,
+        });
+      } else {
+        newCartItems.push({
+          product: {
+            id: item.productId,
+            name: item.productName,
+            sku: 'ORD-AUTO',
+            category: 'Menu',
+            purchasePrice: Math.round(item.price * 0.6),
+            sellingPrice: item.price,
+            stock: 99,
+            unit: 'Porsi',
+            image: item.image,
+            isAvailable: true,
+          },
+          quantity: item.quantity,
+        });
+      }
+    });
+
+    setCart(newCartItems);
+
+    const existingCustomer = customers.find(
+      (c) => c.name.toLowerCase() === order.customerName.toLowerCase()
+    );
+    if (existingCustomer) {
+      setSelectedCustomer(existingCustomer);
+    } else {
+      const tempCust: Customer = {
+        id: `CUST-AUTO-${Date.now().toString(36)}`,
+        name: order.customerName,
+        phone: order.customerPhone || '08123456789',
+        tier: 'Reguler',
+        totalOrders: 1,
+        totalSpent: order.total,
+        points: 0,
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      setSelectedCustomer(tempCust);
+    }
+
+    setCurrentTab('pos');
+    setIsPaymentModalOpen(true);
+    setPendingPaymentMethod(order.paymentMethod === 'Transfer Bank' ? 'Transfer Bank' : 'Tunai');
+    showToast(`Pesanan #${order.queueNumber} (${order.customerName}) dimuat ke Kasir POS`, 'success');
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1189,6 +1330,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSuperAdminOpen,
         setIsSuperAdminOpen,
         openSuperAdminPortal,
+        customerOrders,
+        addCustomerOrder,
+        updateCustomerOrderStatus,
+        deleteCustomerOrder,
+        transferOrderToPOSCart,
+        isCatalogQRModalOpen,
+        setIsCatalogQRModalOpen,
       }}
     >
       {children}

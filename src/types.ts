@@ -5,6 +5,7 @@ export type CustomerTier = 'Reguler' | 'Silver' | 'Gold' | 'VIP';
 export type MainTab =
   | 'dashboard'
   | 'pos'
+  | 'orders'
   | 'transactions'
   | 'products'
   | 'categories'
@@ -14,6 +15,7 @@ export type MainTab =
   | 'backup'
   | 'settings'
   | 'about'
+  | 'customer_catalog'
   | 'login';
 
 export interface AuthUser {
@@ -51,6 +53,7 @@ export interface BackupData {
     transactions: Transaction[];
     expenses: ExpenseRecord[];
     customers: Customer[];
+    customerOrders?: CustomerOrder[];
   };
 }
 
@@ -75,15 +78,18 @@ export interface Product {
   purchasePrice: number;
   sellingPrice: number;
   stock: number;
+  unit?: string;
   minStockAlert?: number;
   image: string;
   isAvailable: boolean;
   soldCount?: number;
+  description?: string;
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
+  notes?: string;
 }
 
 export interface CartDiscount {
@@ -109,7 +115,8 @@ export interface Customer {
   lastOrderDate?: string;
 }
 
-export type PaymentMethod = 'QRIS' | 'Tunai' | 'Transfer Bank' | 'Kartu Debit';
+// Payment method without QRIS
+export type PaymentMethod = 'Tunai' | 'Transfer Bank' | 'Kartu Debit';
 
 export interface Transaction {
   id: string;
@@ -133,8 +140,44 @@ export interface Transaction {
   paymentMethod: PaymentMethod;
   cashGiven?: number;
   change?: number;
+  bankName?: string;
+  bankRefNumber?: string;
+  cardLastDigits?: string;
   status: 'Selesai' | 'Dibatalkan' | 'Tertunda';
   type: 'Penjualan' | 'Penjualan B2B';
+  queueNumber?: string;
+  tableOrRoom?: string;
+}
+
+// Customer Self-Ordering & Queue System Types
+export type CustomerOrderStatus = 'MENUNGGU' | 'DIPROSES' | 'SIAP' | 'SELESAI' | 'DIBATALKAN';
+
+export interface CustomerOrderItem {
+  productId: string;
+  productName: string;
+  price: number;
+  quantity: number;
+  image: string;
+  notes?: string;
+}
+
+export interface CustomerOrder {
+  id: string;
+  queueNumber: string; // e.g. "ANT-001", "ANT-002"
+  customerName: string;
+  customerPhone?: string;
+  tableOrRoom?: string; // e.g. "Meja 03", "Bungkus / Takeaway", "Delivery"
+  notes?: string;
+  orderTime: string;
+  orderTimestamp: number;
+  items: CustomerOrderItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+  paymentMethod: 'Bayar di Kasir (Tunai)' | 'Transfer Bank' | 'Kartu Debit';
+  status: CustomerOrderStatus;
+  isPaid: boolean;
+  source: 'QR_CATALOG' | 'POS_MANUAL';
 }
 
 export interface ExpenseRecord {
@@ -158,6 +201,13 @@ export interface StoreProfile {
   taxRate: number; // 0.1 for 10%
   currencySymbol: string;
   avatarUrl: string;
+  bankAccounts?: {
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+  }[];
+  catalogHeadline?: string;
+  catalogAnnouncement?: string;
 }
 
 // Software Licensing Types
@@ -201,7 +251,7 @@ export interface SuperAdminSession {
 }
 
 // In-App Notification System Types
-export type NotificationType = 'stock_low' | 'stock_empty' | 'system' | 'license' | 'backup';
+export type NotificationType = 'stock_low' | 'stock_empty' | 'system' | 'license' | 'backup' | 'new_order';
 
 export interface InAppNotification {
   id: string;
@@ -215,6 +265,8 @@ export interface InAppNotification {
   productName?: string;
   currentStock?: number;
   minStockAlert?: number;
+  orderId?: string;
+  queueNumber?: string;
   urgency: 'critical' | 'warning' | 'info';
 }
 

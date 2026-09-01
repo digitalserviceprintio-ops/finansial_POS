@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
   X,
-  QrCode,
   Banknote,
   CheckCircle2,
   AlertCircle,
   Copy,
-  Clock,
+  Check,
+  CreditCard,
+  Building2,
   Sparkles,
   ArrowRight,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useApp } from '../../context/AppContext';
@@ -33,37 +36,54 @@ export const PaymentModal: React.FC = () => {
   const total = subtotal + tax;
 
   const [cashGiven, setCashGiven] = useState<number>(total);
-  const [qrisTimer, setQrisTimer] = useState<number>(180); // 3 minutes
+  const [selectedBankIdx, setSelectedBankIdx] = useState<number>(0);
+  const [bankRefNumber, setBankRefNumber] = useState<string>('');
+  const [cardLastDigits, setCardLastDigits] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [copiedBank, setCopiedBank] = useState<string | null>(null);
 
-  // Reset timer on open
+  // Sync cash default on modal open
   useEffect(() => {
-    if (isPaymentModalOpen && pendingPaymentMethod === 'QRIS') {
-      setQrisTimer(180);
-      const interval = setInterval(() => {
-        setQrisTimer((prev) => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-      return () => clearInterval(interval);
+    if (isPaymentModalOpen) {
+      setCashGiven(total);
+      if (pendingPaymentMethod === ('QRIS' as any)) {
+        setPendingPaymentMethod('Tunai');
+      }
     }
-  }, [isPaymentModalOpen, pendingPaymentMethod]);
+  }, [isPaymentModalOpen, total]);
 
   if (!isPaymentModalOpen) return null;
 
   const change = Math.max(0, cashGiven - total);
   const isCashSufficient = cashGiven >= total;
 
-  // Quick cash buttons
+  // Preset cash nominals
   const cashPresets = [
     total,
     Math.ceil(total / 10000) * 10000,
     Math.ceil(total / 50000) * 50000,
+    50000,
     100000,
     200000,
+    500000,
   ].filter((v, i, a) => v >= total && a.indexOf(v) === i);
+
+  const bankAccounts = storeProfile.bankAccounts || [
+    { bankName: 'BCA', accountNumber: '8830-1928-33', accountHolder: 'BUDI SANTOSO / TOKO 2R' },
+    { bankName: 'BRI', accountNumber: '0206-01-002849-50-8', accountHolder: 'TOKO 2R MAJU BERSAMA' },
+    { bankName: 'Mandiri', accountNumber: '137-00-1982736-1', accountHolder: 'TOKO 2R UMKM' },
+  ];
+
+  const handleCopyBankAcc = (accNumber: string) => {
+    navigator.clipboard.writeText(accNumber.replace(/\D/g, ''));
+    setCopiedBank(accNumber);
+    showToast(`Nomor rekening ${accNumber} berhasil disalin!`, 'info');
+    setTimeout(() => setCopiedBank(null), 2000);
+  };
 
   const handleConfirmPayment = () => {
     if (pendingPaymentMethod === 'Tunai' && !isCashSufficient) {
-      showToast('Uang tunai yang diterima kurang dari total belanja!', 'warning');
+      showToast('Uang tunai yang diterima kurang dari total tagihan!', 'warning');
       return;
     }
 
@@ -71,215 +91,287 @@ export const PaymentModal: React.FC = () => {
 
     setTimeout(() => {
       setIsProcessing(false);
-      // Trigger festive confetti
       confetti({
         particleCount: 80,
         spread: 60,
         origin: { y: 0.6 },
       });
       processPayment(pendingPaymentMethod, pendingPaymentMethod === 'Tunai' ? cashGiven : undefined);
-    }, 600);
+    }, 400);
   };
 
-  const minutes = Math.floor(qrisTimer / 60);
-  const seconds = qrisTimer % 60;
-  const timerFormatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-3xl border border-[#e2e1ec] bg-white p-6 shadow-2xl space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
+      <div className="w-full max-w-lg rounded-3xl border border-[#e2e1ec] bg-white p-5 sm:p-6 shadow-2xl space-y-4 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#f3f2fa]">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ebeaff] text-[#4648d4]">
-              {pendingPaymentMethod === 'QRIS' ? <QrCode className="h-5 w-5" /> : <Banknote className="h-5 w-5" />}
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ebeaff] text-[#4648d4] shadow-xs">
+              <Banknote className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#1b1b23]">Pembayaran Kasir</h3>
-              <p className="text-xs text-[#767680]">{selectedCustomer?.name || 'Pelanggan Umum'}</p>
+              <h3 className="text-base font-extrabold text-[#1b1b23]">Pembayaran Transaksi Kasir</h3>
+              <p className="text-xs text-[#767680] font-medium">
+                {selectedCustomer
+                  ? `${selectedCustomer.name} (${selectedCustomer.phone || 'Pelanggan'})`
+                  : 'Pelanggan Umum'}
+              </p>
             </div>
           </div>
           <button
             onClick={() => setIsPaymentModalOpen(false)}
-            className="rounded-xl p-1.5 text-[#767680] hover:bg-[#f3f2fa] hover:text-[#1b1b23]"
+            className="rounded-xl p-1.5 text-[#767680] hover:bg-[#f3f2fa] hover:text-[#1b1b23] cursor-pointer"
+            title="Tutup (Esc)"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Method Selector Tabs */}
-        <div className="grid grid-cols-2 gap-2 p-1 bg-[#f3f2fa] rounded-2xl">
+        {/* Payment Method Selector Tabs */}
+        <div className="grid grid-cols-3 gap-2 p-1.5 bg-[#f3f2fa] rounded-2xl">
           <button
-            onClick={() => setPendingPaymentMethod('QRIS')}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              pendingPaymentMethod === 'QRIS'
-                ? 'bg-white text-[#4648d4] shadow-xs'
-                : 'text-[#767680] hover:text-[#1b1b23]'
-            }`}
-          >
-            <QrCode className="h-4 w-4" />
-            <span>QRIS Standar</span>
-          </button>
-          <button
+            type="button"
             onClick={() => setPendingPaymentMethod('Tunai')}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
               pendingPaymentMethod === 'Tunai'
-                ? 'bg-white text-[#4648d4] shadow-xs'
+                ? 'bg-white text-emerald-700 shadow-xs ring-1 ring-black/5'
                 : 'text-[#767680] hover:text-[#1b1b23]'
             }`}
           >
-            <Banknote className="h-4 w-4" />
-            <span>Tunai / Uang Pas</span>
+            <Banknote className="h-4 w-4 text-emerald-600" />
+            <span>Tunai / Cash</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPendingPaymentMethod('Transfer Bank')}
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+              pendingPaymentMethod === 'Transfer Bank'
+                ? 'bg-white text-[#4648d4] shadow-xs ring-1 ring-black/5'
+                : 'text-[#767680] hover:text-[#1b1b23]'
+            }`}
+          >
+            <Building2 className="h-4 w-4 text-[#4648d4]" />
+            <span>Transfer Bank</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPendingPaymentMethod('Kartu Debit')}
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+              pendingPaymentMethod === 'Kartu Debit'
+                ? 'bg-white text-purple-700 shadow-xs ring-1 ring-black/5'
+                : 'text-[#767680] hover:text-[#1b1b23]'
+            }`}
+          >
+            <CreditCard className="h-4 w-4 text-purple-600" />
+            <span>Kartu / EDC</span>
           </button>
         </div>
 
-        {/* Total Bill Pill */}
-        <div className="flex items-center justify-between p-4 rounded-2xl bg-[#fcf8ff] border border-[#e2e1ec]">
+        {/* Total Bill Card */}
+        <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-[#fcf8ff] to-[#f4f3ff] border border-[#d8d6fc]">
           <div>
-            <span className="text-[11px] font-bold text-[#767680] uppercase tracking-wider">
-              Total Tagihan
+            <span className="text-[10px] font-extrabold text-[#767680] uppercase tracking-wider">
+              Total Tagihan Belanja
             </span>
             <p className="text-2xl font-black text-[#4648d4] tracking-tight">{formatCurrency(total)}</p>
           </div>
-          <span className="rounded-full bg-[#ebeaff] px-3 py-1 text-xs font-bold text-[#4648d4]">
+          <span className="rounded-xl bg-[#ebeaff] px-3 py-1.5 text-xs font-bold text-[#4648d4] border border-[#4648d4]/20 shadow-2xs">
             {cart.reduce((a, c) => a + c.quantity, 0)} Item
           </span>
         </div>
 
-        {/* METHOD 1: QRIS SCREEN */}
-        {pendingPaymentMethod === 'QRIS' && (
-          <div className="flex flex-col items-center justify-center space-y-4 py-2">
-            <div className="relative p-4 rounded-3xl bg-white border-2 border-[#4648d4] shadow-md flex flex-col items-center">
-              {/* Dynamic QR SVG Generator */}
-              <div className="h-48 w-48 bg-white p-2 rounded-2xl border border-[#e2e1ec] flex items-center justify-center relative">
-                <svg
-                  viewBox="0 0 100 100"
-                  className="h-full w-full"
-                  shapeRendering="crispEdges"
-                >
-                  <rect width="100" height="100" fill="white" />
-                  {/* Top-left marker */}
-                  <rect x="10" y="10" width="25" height="25" fill="#1b1b23" rx="2" />
-                  <rect x="15" y="15" width="15" height="15" fill="white" rx="1" />
-                  <rect x="19" y="19" width="7" height="7" fill="#4648d4" rx="1" />
-                  {/* Top-right marker */}
-                  <rect x="65" y="10" width="25" height="25" fill="#1b1b23" rx="2" />
-                  <rect x="70" y="15" width="15" height="15" fill="white" rx="1" />
-                  <rect x="74" y="19" width="7" height="7" fill="#4648d4" rx="1" />
-                  {/* Bottom-left marker */}
-                  <rect x="10" y="65" width="25" height="25" fill="#1b1b23" rx="2" />
-                  <rect x="15" y="70" width="15" height="15" fill="white" rx="1" />
-                  <rect x="19" y="74" width="7" height="7" fill="#4648d4" rx="1" />
-                  {/* QR Pattern dots */}
-                  <rect x="42" y="12" width="6" height="6" fill="#1b1b23" />
-                  <rect x="52" y="18" width="6" height="6" fill="#1b1b23" />
-                  <rect x="40" y="28" width="6" height="6" fill="#1b1b23" />
-                  <rect x="12" y="44" width="6" height="6" fill="#1b1b23" />
-                  <rect x="24" y="48" width="6" height="6" fill="#1b1b23" />
-                  <rect x="44" y="44" width="12" height="12" fill="#4648d4" rx="2" />
-                  <rect x="65" y="42" width="6" height="6" fill="#1b1b23" />
-                  <rect x="78" y="48" width="6" height="6" fill="#1b1b23" />
-                  <rect x="42" y="66" width="6" height="6" fill="#1b1b23" />
-                  <rect x="52" y="74" width="6" height="6" fill="#1b1b23" />
-                  <rect x="68" y="68" width="8" height="8" fill="#1b1b23" />
-                  <rect x="80" y="78" width="8" height="8" fill="#1b1b23" />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="h-9 w-9 rounded-lg bg-white border border-[#4648d4] flex items-center justify-center text-[#4648d4] font-bold text-xs shadow-xs">
-                    QRIS
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 mt-2 text-[11px] font-bold text-[#46464f]">
-                <Clock className="h-3.5 w-3.5 text-[#ba1a1a]" />
-                <span>Berlaku hingga: {timerFormatted}</span>
-              </div>
-            </div>
-
-            <p className="text-center text-xs text-[#767680] max-w-xs">
-              Mendukung GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI & seluruh mobile banking.
-            </p>
-          </div>
-        )}
-
-        {/* METHOD 2: CASH SCREEN */}
+        {/* TAB 1: TUNAI */}
         {pendingPaymentMethod === 'Tunai' && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <div>
-              <label className="block text-xs font-bold text-[#1b1b23] mb-1.5">
-                Uang Tunai yang Diterima
+              <label className="block text-xs font-extrabold text-[#1b1b23] mb-1.5">
+                Uang Diterima dari Pelanggan:
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-[#767680]">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-black text-[#767680]">
                   Rp
                 </span>
                 <input
-                  id="cash-input"
                   type="number"
-                  step="1000"
                   value={cashGiven || ''}
-                  onChange={(e) => setCashGiven(parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-2xl border border-[#d2d1dc] bg-[#fcf8ff] py-3 pl-10 pr-4 text-base font-extrabold text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none"
+                  onChange={(e) => setCashGiven(Number(e.target.value))}
+                  placeholder="0"
+                  className="w-full pl-11 pr-4 py-2.5 text-base font-black text-[#1b1b23] rounded-2xl border border-[#cac4d0] focus:border-emerald-600 focus:outline-none"
+                  autoFocus
                 />
               </div>
             </div>
 
-            {/* Quick preset buttons */}
-            <div className="flex flex-wrap gap-2">
-              {cashPresets.map((val) => (
-                <button
-                  key={val}
-                  onClick={() => setCashGiven(val)}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold border transition-all ${
-                    cashGiven === val
-                      ? 'border-[#4648d4] bg-[#ebeaff] text-[#4648d4]'
-                      : 'border-[#e2e1ec] bg-white text-[#46464f] hover:bg-[#f3f2fa]'
-                  }`}
-                >
-                  {val === total ? 'Uang Pas' : formatCurrency(val)}
-                </button>
-              ))}
+            {/* Quick Nominal Presets */}
+            <div>
+              <span className="text-[11px] font-extrabold text-[#767680]">Nominal Cepat (Uang Pas / Pecahan):</span>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {cashPresets.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setCashGiven(preset)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      cashGiven === preset
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-[#f3f2fa] text-[#1b1b23] hover:bg-[#ebeaff]'
+                    }`}
+                  >
+                    {preset === total ? '⚡ Uang Pas' : formatCurrency(preset)}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Change Calculation Display */}
+            {/* Change Calculation Box */}
             <div
-              className={`p-4 rounded-2xl border transition-all ${
+              className={`p-3.5 rounded-2xl border flex items-center justify-between ${
                 isCashSufficient
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                  : 'bg-red-50 border-red-200 text-red-950'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-900'
               }`}
             >
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold uppercase tracking-wider">
-                  {isCashSufficient ? 'Kembalian Pelanggan' : 'Uang Pembayaran Kurang'}
+              <div>
+                <span className="text-[10px] font-extrabold uppercase">
+                  {isCashSufficient ? 'Kembalian Pelanggan' : 'Kekurangan Uang'}
                 </span>
-                <span className="text-xl font-black">
-                  {isCashSufficient ? formatCurrency(change) : formatCurrency(total - cashGiven)}
+                <p className="text-xl font-black">
+                  {isCashSufficient
+                    ? formatCurrency(change)
+                    : formatCurrency(Math.abs(total - cashGiven))}
+                </p>
+              </div>
+              <div className="text-right">
+                <span
+                  className={`text-xs font-black px-2.5 py-1 rounded-xl ${
+                    isCashSufficient ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
+                  }`}
+                >
+                  {isCashSufficient ? '✓ Cukup' : 'Kurang'}
                 </span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Action Button */}
-        <div className="pt-2">
+        {/* TAB 2: TRANSFER BANK */}
+        {pendingPaymentMethod === 'Transfer Bank' && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <label className="text-xs font-extrabold text-[#1b1b23]">
+                Pilih Rekening Tujuan Transfer:
+              </label>
+              <div className="space-y-2">
+                {bankAccounts.map((acc, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedBankIdx(idx)}
+                    className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                      selectedBankIdx === idx
+                        ? 'border-[#4648d4] bg-[#ebeaff]/50 shadow-xs'
+                        : 'border-[#e2e1ec] bg-white hover:bg-[#fcf8ff]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-xl bg-[#4648d4] text-white flex items-center justify-center font-black text-xs">
+                        {acc.bankName.substring(0, 3)}
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-[#1b1b23]">
+                          Bank {acc.bankName} - <span className="font-mono">{acc.accountNumber}</span>
+                        </p>
+                        <p className="text-[10px] text-[#767680] font-semibold">a.n. {acc.accountHolder}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyBankAcc(acc.accountNumber);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-white border border-[#cac4d0] text-[10px] font-bold text-[#4648d4] hover:bg-slate-100 cursor-pointer"
+                    >
+                      {copiedBank === acc.accountNumber ? 'Disalin' : 'Salin'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-[#1b1b23] mb-1">
+                Nomor Referensi / Nama Pengirim (Opsional):
+              </label>
+              <input
+                type="text"
+                value={bankRefNumber}
+                onChange={(e) => setBankRefNumber(e.target.value)}
+                placeholder="Contoh: TRF-BCA-9921 / Doni"
+                className="w-full px-3.5 py-2 text-xs font-bold text-[#1b1b23] rounded-xl border border-[#cac4d0] focus:border-[#4648d4] focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: KARTU DEBIT / EDC */}
+        {pendingPaymentMethod === 'Kartu Debit' && (
+          <div className="space-y-3">
+            <div className="bg-[#fcf8ff] p-3 rounded-2xl border border-[#e2e1ec] text-xs space-y-1">
+              <span className="font-extrabold text-[#4648d4] flex items-center gap-1.5">
+                <CreditCard className="h-4 w-4" />
+                Mesin EDC Siap Digunakan
+              </span>
+              <p className="text-[11px] text-[#767680]">
+                Silakan gesek atau masukkan kartu debit/kredit pelanggan pada mesin EDC kasir.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-[#1b1b23] mb-1">
+                4 Digit Terakhir Kartu / No. Otorisasi (Opsional):
+              </label>
+              <input
+                type="text"
+                value={cardLastDigits}
+                onChange={(e) => setCardLastDigits(e.target.value)}
+                placeholder="Contoh: 4321 - APPR 981244"
+                maxLength={20}
+                className="w-full px-3.5 py-2 text-xs font-bold text-[#1b1b23] rounded-xl border border-[#cac4d0] focus:border-purple-600 focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Footer Confirm */}
+        <div className="pt-2 flex gap-2">
           <button
-            id="confirm-payment-btn"
+            type="button"
+            onClick={() => setIsPaymentModalOpen(false)}
+            className="flex-1 py-3 rounded-2xl border border-[#cac4d0] text-xs font-bold text-[#767680] hover:bg-[#f3f2fa] cursor-pointer"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
             disabled={isProcessing || (pendingPaymentMethod === 'Tunai' && !isCashSufficient)}
             onClick={handleConfirmPayment}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4648d4] py-3.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-[#3435ad] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className={`flex-2 py-3 rounded-2xl text-white text-xs font-black shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              pendingPaymentMethod === 'Tunai'
+                ? 'bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300'
+                : pendingPaymentMethod === 'Transfer Bank'
+                ? 'bg-[#4648d4] hover:bg-[#383ab2]'
+                : 'bg-purple-600 hover:bg-purple-700'
+            }`}
           >
             {isProcessing ? (
               <span>Memproses Pembayaran...</span>
             ) : (
               <>
                 <CheckCircle2 className="h-4 w-4" />
-                <span>
-                  {pendingPaymentMethod === 'QRIS'
-                    ? 'Simulasi Bayar QRIS Sukses & Cetak Struk'
-                    : 'Konfirmasi Pembayaran Tunai & Selesai'}
-                </span>
+                <span>Konfirmasi Pembayaran ({formatCurrency(total)})</span>
               </>
             )}
           </button>

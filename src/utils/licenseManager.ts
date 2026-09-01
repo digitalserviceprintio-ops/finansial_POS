@@ -244,10 +244,10 @@ export const LicenseManager = {
     // Generate Standard 14-Day Free Trial for fresh tenants
     const trialLicense: AppLicense = {
       id: `LIC-TRL-${tenantId.slice(-6)}`,
-      licenseKey: `FPRO-TRL-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-TRIAL`,
+      licenseKey: `DELPOS-TRL-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-TRIAL`,
       tenantId,
       businessName: defaultBusinessName || 'Bisnis Anda',
-      clientName: 'Pengguna FinansialPro',
+      clientName: 'Pengguna DelPOS',
       clientEmail: '',
       clientPhone: '',
       tier: 'TRIAL',
@@ -259,7 +259,7 @@ export const LicenseManager = {
       maxProducts: 200,
       features: TIER_FEATURES.TRIAL,
       price: 0,
-      notes: 'Lisensi Uji Coba Gratis 14 Hari FinansialPro',
+      notes: 'Lisensi Uji Coba Gratis 14 Hari DelPOS (powered by AkuPos)',
     };
 
     localStorage.setItem(`${ACTIVE_TENANT_LICENSE_KEY_PREFIX}${tenantId}`, JSON.stringify(trialLicense));
@@ -289,7 +289,7 @@ export const LicenseManager = {
             licenseKey: cleanKey,
             tenantId,
             businessName: tenantBusinessName || 'Bisnis Mitra',
-            clientName: 'Mitra FinansialPro',
+            clientName: 'Mitra DelPOS',
             clientEmail: '',
             clientPhone: '',
             tier,

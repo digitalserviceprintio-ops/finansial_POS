@@ -14,6 +14,11 @@ import {
   Search,
   Zap,
   Package,
+  Plus,
+  Minus,
+  ShoppingCart,
+  Info,
+  Layers,
 } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useApp } from '../../context/AppContext';
@@ -28,7 +33,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { products, addToCart, formatCurrency, showToast } = useApp();
+  const {
+    products,
+    cart,
+    addToCart,
+    removeFromCart,
+    formatCurrency,
+    showToast,
+  } = useApp();
 
   const [scannerActive, setScannerActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -36,7 +48,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [isTorchOn, setIsTorchOn] = useState(false);
+  const [hasTorch, setHasTorch] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [scanMode, setScanMode] = useState<'auto_add' | 'lookup'>('auto_add');
   const [continuousMode, setContinuousMode] = useState(true);
   const [lastScannedResult, setLastScannedResult] = useState<{
     code: string;
@@ -52,24 +66,34 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const lastScannedCodeRef = useRef<string>('');
 
   // Audio Beep Effect
-  const playBeep = () => {
+  const playBeep = (isSuccess = true) => {
     if (!soundEnabled) return;
     try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1760, ctx.currentTime); // A6 note
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+      if (isSuccess) {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1760, ctx.currentTime); // A6 note
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.12);
+      } else {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(300, ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.2);
+      }
 
       osc.connect(gain);
       gain.connect(ctx.destination);
-
-      osc.start();
-      osc.stop(ctx.currentTime + 0.12);
     } catch {
       // Audio playback not allowed or supported
     }
@@ -104,6 +128,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
     if (matchedProduct) {
       if (matchedProduct.stock <= 0 || !matchedProduct.isAvailable) {
+        playBeep(false);
         setLastScannedResult({
           code: decodedText,
           product: matchedProduct,
@@ -112,23 +137,29 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         });
         showToast(`Produk "${matchedProduct.name}" stok habis!`, 'warning');
       } else {
-        addToCart(matchedProduct);
-        playBeep();
+        playBeep(true);
+        if (scanMode === 'auto_add') {
+          addToCart(matchedProduct);
+          showToast(`+1 ${matchedProduct.name} (${matchedProduct.sku}) masuk keranjang`, 'success');
+        } else {
+          showToast(`Info Produk: ${matchedProduct.name} - ${formatCurrency(matchedProduct.sellingPrice)}`, 'info');
+        }
+
         setLastScannedResult({
           code: decodedText,
           product: matchedProduct,
           status: 'success',
           timestamp: now,
         });
-        showToast(`+1 ${matchedProduct.name} (${matchedProduct.sku}) masuk keranjang`, 'success');
 
-        if (!continuousMode) {
+        if (!continuousMode && scanMode === 'auto_add') {
           setTimeout(() => {
             onClose();
           }, 600);
         }
       }
     } else {
+      playBeep(false);
       setLastScannedResult({
         code: decodedText,
         status: 'not_found',
@@ -183,7 +214,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           if (!selectedCameraId) {
             // Prefer back camera if found
             const backCam = availableDevices.find((d) =>
-              d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear') || d.label.toLowerCase().includes('belakang')
+              d.label.toLowerCase().includes('back') ||
+              d.label.toLowerCase().includes('rear') ||
+              d.label.toLowerCase().includes('belakang') ||
+              d.label.toLowerCase().includes('environment')
             );
             setSelectedCameraId(backCam ? backCam.id : availableDevices[0].id);
           }
@@ -197,12 +231,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         : { facingMode: facingMode };
 
       const qrConfig = {
-        fps: 15,
+        fps: 20,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
           const minDim = Math.min(viewfinderWidth, viewfinderHeight);
-          // Wide rectangular box suitable for 1D barcodes and 2D QR
           return {
-            width: Math.floor(minDim * 0.85),
+            width: Math.floor(minDim * 0.88),
             height: Math.floor(minDim * 0.55),
           };
         },
@@ -216,12 +249,24 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           handleBarcodeDecoded(decodedText);
         },
         () => {
-          // ignore scan frame without barcode
+          // ignore frames without barcodes
         }
       );
 
       isScanningRef.current = true;
       setScannerActive(true);
+
+      // Check if torch/flashlight is supported
+      try {
+        const capabilities = html5QrCode.getRunningTrackCameraCapabilities();
+        if (capabilities && capabilities.torchFeature().isSupported()) {
+          setHasTorch(true);
+        } else {
+          setHasTorch(false);
+        }
+      } catch {
+        setHasTorch(false);
+      }
     } catch (err: unknown) {
       console.warn('Barcode camera scanner error:', err);
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -237,6 +282,19 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   };
 
+  const toggleTorch = async () => {
+    if (!html5QrCodeRef.current || !isScanningRef.current || !hasTorch) return;
+    try {
+      const capabilities = html5QrCodeRef.current.getRunningTrackCameraCapabilities();
+      const torchFeature = capabilities.torchFeature();
+      const nextState = !isTorchOn;
+      await torchFeature.apply(nextState);
+      setIsTorchOn(nextState);
+    } catch (e) {
+      console.warn('Failed to toggle torch:', e);
+    }
+  };
+
   const stopScanner = async () => {
     if (html5QrCodeRef.current && isScanningRef.current) {
       try {
@@ -247,6 +305,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       }
       isScanningRef.current = false;
       setScannerActive(false);
+      setIsTorchOn(false);
     }
   };
 
@@ -275,10 +334,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   };
 
   // Sample SKU tags for rapid 1-click testing
-  const sampleSkus = products.slice(0, 6);
+  const sampleSkus = products.slice(0, 8);
+
+  const matchedProductInCart = lastScannedResult?.product
+    ? cart.find((item) => item.product.id === lastScannedResult.product?.id)
+    : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 sm:p-4 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg rounded-3xl border border-[#e2e1ec] bg-white p-5 sm:p-6 shadow-2xl space-y-4 max-h-[95vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#f3f2fa]">
@@ -288,20 +351,50 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-[#1b1b23] flex items-center gap-2">
-                <span>Scan Barcode Kasir</span>
+                <span>Scan Barcode Kamera POS</span>
                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                  Kamera POS
+                  Live Scanner
                 </span>
               </h3>
-              <p className="text-xs text-[#767680]">Arahkan kamera ke barcode/QR produk</p>
+              <p className="text-xs text-[#767680]">Arahkan kamera perangkat ke barcode produk atau SKU</p>
             </div>
           </div>
           <button
             id="close-scanner-modal-btn"
             onClick={onClose}
-            className="rounded-xl p-1.5 text-[#767680] hover:bg-[#f3f2fa] hover:text-[#1b1b23] transition-colors"
+            className="rounded-xl p-1.5 text-[#767680] hover:bg-[#f3f2fa] hover:text-[#1b1b23] transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Mode Selector Tab */}
+        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-[#f3f2fa] border border-[#e2e1ec]">
+          <button
+            id="btn-mode-auto-add"
+            type="button"
+            onClick={() => setScanMode('auto_add')}
+            className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              scanMode === 'auto_add'
+                ? 'bg-white text-[#4648d4] shadow-xs'
+                : 'text-[#767680] hover:text-[#1b1b23]'
+            }`}
+          >
+            <ShoppingCart className="h-3.5 w-3.5" />
+            <span>Auto +1 Keranjang</span>
+          </button>
+          <button
+            id="btn-mode-lookup"
+            type="button"
+            onClick={() => setScanMode('lookup')}
+            className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              scanMode === 'lookup'
+                ? 'bg-white text-[#4648d4] shadow-xs'
+                : 'text-[#767680] hover:text-[#1b1b23]'
+            }`}
+          >
+            <Info className="h-3.5 w-3.5" />
+            <span>Cek Info & Stok</span>
           </button>
         </div>
 
@@ -344,7 +437,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               <div className="flex gap-2">
                 <button
                   onClick={startScanner}
-                  className="flex items-center gap-1.5 rounded-xl bg-[#4648d4] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#3435ad]"
+                  className="flex items-center gap-1.5 rounded-xl bg-[#4648d4] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#3435ad] cursor-pointer"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   <span>Coba Lagi</span>
@@ -355,10 +448,25 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
           {/* Overlay Quick Control Bar */}
           <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 rounded-xl bg-black/50 p-1 backdrop-blur-md">
+            {/* Torch Flashlight Toggle */}
+            {hasTorch && (
+              <button
+                type="button"
+                onClick={toggleTorch}
+                className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                  isTorchOn ? 'text-amber-300 bg-amber-400/20' : 'text-neutral-400 hover:text-white'
+                }`}
+                title={isTorchOn ? 'Matikan Senter' : 'Nyalakan Senter'}
+              >
+                <Flashlight className="h-4 w-4" />
+              </button>
+            )}
+
             {/* Audio Toggle */}
             <button
+              type="button"
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className={`p-1.5 rounded-lg text-xs transition-colors ${
+              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
                 soundEnabled ? 'text-white bg-white/20' : 'text-neutral-400 hover:text-white'
               }`}
               title={soundEnabled ? 'Suara Beep Aktif' : 'Suara Beep Nonaktif'}
@@ -369,12 +477,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             {/* Camera switch if multiple */}
             {cameras.length > 1 && (
               <button
+                type="button"
                 onClick={() => {
                   const nextIndex =
                     (cameras.findIndex((c) => c.id === selectedCameraId) + 1) % cameras.length;
                   setSelectedCameraId(cameras[nextIndex].id);
                 }}
-                className="p-1.5 rounded-lg text-xs text-white hover:bg-white/20 transition-colors"
+                className="p-1.5 rounded-lg text-xs text-white hover:bg-white/20 transition-colors cursor-pointer"
                 title="Ganti Kamera"
               >
                 <Camera className="h-4 w-4" />
@@ -383,57 +492,107 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           </div>
         </div>
 
-        {/* Live Feedback Banner from Scanned Result */}
+        {/* Live Feedback Card from Scanned Result */}
         {lastScannedResult && (
           <div
-            className={`p-3 rounded-2xl border transition-all animate-in zoom-in-95 duration-150 ${
+            className={`p-3.5 rounded-2xl border transition-all animate-in zoom-in-95 duration-150 ${
               lastScannedResult.status === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
                 : lastScannedResult.status === 'out_of_stock'
-                ? 'bg-red-50 border-red-200 text-red-950'
-                : 'bg-amber-50 border-amber-200 text-amber-950'
+                ? 'bg-red-50/80 border-red-200 text-red-950'
+                : 'bg-amber-50/80 border-amber-200 text-amber-950'
             }`}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-3">
               {lastScannedResult.product ? (
                 <img
                   src={lastScannedResult.product.image}
                   alt={lastScannedResult.product.name}
-                  className="h-10 w-10 rounded-xl object-cover border border-black/10 shrink-0 bg-white"
+                  className="h-12 w-12 rounded-xl object-cover border border-black/10 shrink-0 bg-white"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="h-5 w-5" />
+                <div className="h-12 w-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="h-6 w-6" />
                 </div>
               )}
 
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-1">
                   <p className="text-xs font-bold truncate">
                     {lastScannedResult.product
                       ? lastScannedResult.product.name
-                      : `Barcode: ${lastScannedResult.code}`}
+                      : `Kode: ${lastScannedResult.code}`}
                   </p>
-                  <span className="text-[10px] font-mono opacity-75">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/5 shrink-0">
                     {lastScannedResult.product?.sku || 'Unrecognized'}
                   </span>
                 </div>
-                <p className="text-[11px] mt-0.5">
-                  {lastScannedResult.status === 'success' && (
-                    <span className="text-emerald-700 font-bold">
-                      +1 Ditambahkan ke Keranjang • {formatCurrency(lastScannedResult.product!.sellingPrice)}
-                    </span>
-                  )}
-                  {lastScannedResult.status === 'out_of_stock' && (
-                    <span className="text-red-700 font-bold">Stok Produk Habis</span>
-                  )}
-                  {lastScannedResult.status === 'not_found' && (
-                    <span className="text-amber-800">
-                      Tidak ada produk terdaftar dengan SKU/Kode ini.
-                    </span>
-                  )}
-                </p>
+
+                {lastScannedResult.product && (
+                  <div className="mt-1 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-extrabold text-[#4648d4]">
+                        {formatCurrency(lastScannedResult.product.sellingPrice)}
+                      </span>
+                      <span className="text-[11px] text-[#767680] ml-2">
+                        Stok: {lastScannedResult.product.stock} {lastScannedResult.product.unit || 'pcs'}
+                      </span>
+                    </div>
+
+                    {/* Direct Cart Controls in Scanned Card */}
+                    <div className="flex items-center gap-1.5">
+                      {matchedProductInCart ? (
+                        <div className="flex items-center gap-1 bg-white border border-[#d2d1dc] rounded-lg px-1.5 py-0.5 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(lastScannedResult.product!.id)}
+                            className="p-1 text-[#767680] hover:text-red-600 rounded"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="text-xs font-bold px-1 text-[#1b1b23]">
+                            {matchedProductInCart.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => addToCart(lastScannedResult.product!)}
+                            disabled={matchedProductInCart.quantity >= lastScannedResult.product!.stock}
+                            className="p-1 text-[#4648d4] hover:text-[#3435ad] disabled:opacity-30 rounded"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            addToCart(lastScannedResult.product!);
+                            playBeep(true);
+                            showToast(`+1 ${lastScannedResult.product!.name} masuk keranjang`, 'success');
+                          }}
+                          disabled={lastScannedResult.product.stock <= 0}
+                          className="flex items-center gap-1 rounded-lg bg-[#4648d4] px-2.5 py-1 text-[11px] font-bold text-white shadow-xs hover:bg-[#3435ad] disabled:opacity-40 transition-all cursor-pointer"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>+ Keranjang</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {lastScannedResult.status === 'out_of_stock' && (
+                  <p className="text-[11px] font-bold text-red-700 mt-1">
+                    Stok produk ini sedang habis di gudang/etalase.
+                  </p>
+                )}
+
+                {lastScannedResult.status === 'not_found' && (
+                  <p className="text-[11px] text-amber-800 mt-1">
+                    Tidak ditemukan produk terdaftar dengan SKU/Kode ini.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -448,17 +607,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               onChange={(e) => setContinuousMode(e.target.checked)}
               className="h-4 w-4 rounded text-[#4648d4] focus:ring-[#4648d4]"
             />
-            <span className="font-bold text-[#1b1b23]">Scan Multi-Item (Tanpa Tutup)</span>
+            <span className="font-bold text-[#1b1b23]">Scan Berulang (Multi-Item)</span>
           </label>
           <span className="text-[11px] text-[#767680]">
-            {continuousMode ? 'Cepat untuk banyak barang' : 'Tutup otomatis setelah 1 scan'}
+            {continuousMode ? 'Tetap buka untuk scan banyak' : 'Tutup otomatis setelah 1 scan'}
           </span>
         </div>
 
         {/* Manual Barcode / SKU Input */}
         <form onSubmit={handleManualSubmit} className="space-y-2">
           <label className="block text-xs font-bold text-[#1b1b23]">
-            Input Barcode / SKU Manual:
+            Input Barcode / SKU Manual (Keyboard / Scanner Gun):
           </label>
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -476,9 +635,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               id="btn-submit-manual-barcode"
               type="submit"
               disabled={!manualCodeInput.trim()}
-              className="rounded-xl bg-[#4648d4] px-4 py-2 text-xs font-bold text-white hover:bg-[#3435ad] disabled:opacity-50 transition-all"
+              className="rounded-xl bg-[#4648d4] px-4 py-2 text-xs font-bold text-white hover:bg-[#3435ad] disabled:opacity-50 transition-all cursor-pointer"
             >
-              Tambah
+              Lookup
             </button>
           </div>
         </form>
@@ -487,7 +646,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         <div className="space-y-1.5 pt-1">
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#767680]">
             <Zap className="h-3 w-3 text-amber-500" />
-            <span>Contoh Barcode SKU Produk Kasir:</span>
+            <span>Klik Cepat Uji Coba SKU:</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {sampleSkus.map((p) => (
@@ -496,7 +655,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 id={`chip-test-sku-${p.sku}`}
                 type="button"
                 onClick={() => handleBarcodeDecoded(p.sku)}
-                className="rounded-lg border border-[#e2e1ec] bg-[#fcf8ff] px-2.5 py-1 text-[11px] font-mono font-semibold text-[#46464f] hover:border-[#4648d4] hover:bg-[#ebeaff] hover:text-[#4648d4] transition-colors"
+                className="rounded-lg border border-[#e2e1ec] bg-[#fcf8ff] px-2.5 py-1 text-[11px] font-mono font-semibold text-[#46464f] hover:border-[#4648d4] hover:bg-[#ebeaff] hover:text-[#4648d4] transition-colors cursor-pointer"
               >
                 {p.sku} ({p.name})
               </button>
@@ -505,10 +664,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="pt-2 border-t border-[#f3f2fa] flex justify-end">
+        <div className="pt-2 border-t border-[#f3f2fa] flex items-center justify-between">
+          <div className="text-[11px] text-[#767680]">
+            Total di keranjang: <span className="font-bold text-[#1b1b23]">{cart.reduce((a, b) => a + b.quantity, 0)} item</span>
+          </div>
           <button
             onClick={onClose}
-            className="rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-5 py-2.5 text-xs font-bold text-[#46464f] hover:bg-[#f3f2fa] transition-all"
+            className="rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-5 py-2.5 text-xs font-bold text-[#46464f] hover:bg-[#f3f2fa] transition-all cursor-pointer"
           >
             Selesai / Tutup Scanner
           </button>
@@ -517,3 +679,4 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     </div>
   );
 };
+

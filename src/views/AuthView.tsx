@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Store,
   Mail,
   Lock,
   User,
@@ -20,6 +19,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { DelPOSLogo } from '../components/brand/DelPOSLogo';
+import { DelPOSFeatureBadges } from '../components/brand/DelPOSFeatureBadges';
 
 export const AuthView: React.FC = () => {
   const {
@@ -170,7 +171,7 @@ export const AuthView: React.FC = () => {
       setIsVerifying(false);
 
       if (res.success) {
-        showToast('🎉 Email berhasil diverifikasi! Selamat datang di FinansialPro.', 'success');
+        showToast('🎉 Email berhasil diverifikasi! Selamat datang di DelPOS.', 'success');
       } else {
         setErrorMessage(res.message || 'Kode verifikasi tidak sesuai atau sudah kadaluarsa.');
       }
@@ -237,19 +238,18 @@ export const AuthView: React.FC = () => {
           </div>
         )}
 
+        {/* Top Feature Highlights Bar from Image */}
+        <div className="mb-4">
+          <DelPOSFeatureBadges layout="grid" />
+        </div>
+
         {/* Main Auth Card Container */}
         <div className="bg-white rounded-3xl border border-[#e2e1ec] shadow-2xl overflow-hidden">
           {/* Header Banner */}
-          <div className="bg-gradient-to-r from-[#4648d4] to-[#2e2f9d] p-6 sm:p-8 text-white relative">
+          <div className="bg-gradient-to-r from-[#003B99] via-[#0055EE] to-[#0077FF] p-6 sm:p-7 text-white relative">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md text-white shadow-inner">
-                  <Store className="h-6 w-6" />
-                </div>
-                <div>
-                  <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">FinansialPro UMKM</h1>
-                  <p className="text-xs text-white/80">Sistem Kasir POS & Pembukuan Finansial Terintegrasi</p>
-                </div>
+                <DelPOSLogo variant="compact" size="lg" theme="dark" showPoweredBy={true} />
               </div>
 
               <div className="hidden sm:flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold text-white">
@@ -422,7 +422,7 @@ export const AuthView: React.FC = () => {
                     className="h-4 w-4 rounded text-[#4648d4] focus:ring-[#4648d4]"
                   />
                   <label htmlFor="terms-check" className="text-[11px] text-[#767680] cursor-pointer">
-                    Saya menyetujui Ketentuan Layanan & Kebijakan Data FinansialPro
+                    Saya menyetujui Ketentuan Layanan & Kebijakan Data DelPOS (powered by AkuPos)
                   </label>
                 </div>
 

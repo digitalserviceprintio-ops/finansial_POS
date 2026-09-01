@@ -426,12 +426,12 @@ export const DashboardView: React.FC = () => {
                   </td>
                   <td className="py-3 px-3">
                     <span className="inline-flex items-center gap-1 rounded-md bg-[#f3f2fa] px-2 py-0.5 font-semibold text-[#46464f]">
-                      {trx.paymentMethod === 'QRIS' ? (
-                        <QrCode className="h-3 w-3 text-[#4648d4]" />
-                      ) : trx.paymentMethod === 'Tunai' ? (
+                      {trx.paymentMethod === 'Tunai' ? (
                         <Banknote className="h-3 w-3 text-emerald-600" />
-                      ) : (
+                      ) : trx.paymentMethod === 'Transfer Bank' ? (
                         <Building className="h-3 w-3 text-blue-600" />
+                      ) : (
+                        <CreditCard className="h-3 w-3 text-purple-600" />
                       )}
                       <span>{trx.paymentMethod}</span>
                     </span>

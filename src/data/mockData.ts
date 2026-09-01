@@ -1,4 +1,4 @@
-import { Product, Transaction, ExpenseRecord, Customer, StoreProfile, CategoryItem } from '../types';
+import { Product, Transaction, ExpenseRecord, Customer, StoreProfile, CategoryItem, CustomerOrder } from '../types';
 
 export const initialCategories: CategoryItem[] = [
   {
@@ -54,7 +54,7 @@ export const initialCategories: CategoryItem[] = [
 ];
 
 export const initialStoreProfile: StoreProfile = {
-  name: 'Solusi UMKM / FinansialPro',
+  name: 'Toko DelPOS Berkah',
   branch: 'Toko 2R Maju Bersama',
   owner: 'Budi Santoso',
   phone: '0812-3456-7890',
@@ -62,6 +62,25 @@ export const initialStoreProfile: StoreProfile = {
   taxRate: 0.1, // 10%
   currencySymbol: 'Rp',
   avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCoLtV3Bv2OBXPlq_WrGjzOKb2hx7Pr3DOTjypa8dkEKduOjjWvN91FeXpeuVJDGRacnpFhqLouF2glsjyg154-ONwKg9-AXq2ylnHCQIAwb0pQ9662t3tt1reJkfrz46PuKvm9rTpygmqRrJUs0iC2FvO13DZ8nlMx-0eSm-8yba6zLFIndlcCVnmVfynCOWQHJRodfFxaOXcZ1AmWZ9mFAugAFABkMmuQ6rlyglKy280HkFHaQKc',
+  bankAccounts: [
+    {
+      bankName: 'BCA',
+      accountNumber: '8830-1928-33',
+      accountHolder: 'BUDI SANTOSO / TOKO 2R',
+    },
+    {
+      bankName: 'BRI',
+      accountNumber: '0206-01-002849-50-8',
+      accountHolder: 'TOKO 2R MAJU BERSAMA',
+    },
+    {
+      bankName: 'Mandiri',
+      accountNumber: '137-00-1928374-1',
+      accountHolder: 'BUDI SANTOSO',
+    },
+  ],
+  catalogHeadline: 'Katalog Menu & Produk Segar Pilihan',
+  catalogAnnouncement: 'Selamat datang! Scan barcode untuk memesan mandiri, nomor antrian otomatis tercatat di kasir.',
 };
 
 export const initialCustomers: Customer[] = [
@@ -347,7 +366,7 @@ export const initialTransactions: Transaction[] = [
     tax: 6500,
     discount: 0,
     total: 71500,
-    paymentMethod: 'QRIS',
+    paymentMethod: 'Transfer Bank',
     status: 'Selesai',
     type: 'Penjualan',
   },
@@ -515,3 +534,109 @@ export const initialExpenses: ExpenseRecord[] = [
     recipient: 'Pengelola Ruko',
   },
 ];
+
+export const initialCustomerOrders: CustomerOrder[] = [
+  {
+    id: 'ORD-20231024-001',
+    queueNumber: 'ANT-001',
+    customerName: 'Dimas Wicaksono',
+    customerPhone: '0812-9988-7711',
+    tableOrRoom: 'Meja 04',
+    notes: 'Kopi jangan terlalu manis, extra es',
+    orderTime: '14:20 WIB',
+    orderTimestamp: Date.now() - 1000 * 60 * 15,
+    items: [
+      {
+        productId: 'PROD-001',
+        productName: 'Nasi Goreng Spesial',
+        price: 25000,
+        quantity: 2,
+        image: initialProducts[0].image,
+        notes: 'Pedas sedang',
+      },
+      {
+        productId: 'PROD-002',
+        productName: 'Es Teh Manis Segar',
+        price: 5000,
+        quantity: 2,
+        image: initialProducts[1].image,
+      },
+    ],
+    subtotal: 60000,
+    tax: 6000,
+    total: 66000,
+    paymentMethod: 'Bayar di Kasir (Tunai)',
+    status: 'MENUNGGU',
+    isPaid: false,
+    source: 'QR_CATALOG',
+  },
+  {
+    id: 'ORD-20231024-002',
+    queueNumber: 'ANT-002',
+    customerName: 'Rina Marlina',
+    customerPhone: '0857-1122-3344',
+    tableOrRoom: 'Bungkus / Takeaway',
+    notes: 'Bungkus terpisah ya kak',
+    orderTime: '14:10 WIB',
+    orderTimestamp: Date.now() - 1000 * 60 * 25,
+    items: [
+      {
+        productId: 'PROD-003',
+        productName: 'Ayam Goreng Sambal',
+        price: 20000,
+        quantity: 1,
+        image: initialProducts[2].image,
+        notes: 'Sambal dipisah',
+      },
+      {
+        productId: 'PROD-006',
+        productName: 'Kopi Arabika Premium 250g',
+        price: 65000,
+        quantity: 1,
+        image: initialProducts[5].image,
+      },
+    ],
+    subtotal: 85000,
+    tax: 8500,
+    total: 93500,
+    paymentMethod: 'Transfer Bank',
+    status: 'DIPROSES',
+    isPaid: true,
+    source: 'QR_CATALOG',
+  },
+  {
+    id: 'ORD-20231024-003',
+    queueNumber: 'ANT-003',
+    customerName: 'Hendra Saputra',
+    customerPhone: '0813-4455-6677',
+    tableOrRoom: 'Meja 02',
+    notes: '',
+    orderTime: '13:45 WIB',
+    orderTimestamp: Date.now() - 1000 * 60 * 50,
+    items: [
+      {
+        productId: 'PROD-004',
+        productName: 'Indomie Rebus Telur',
+        price: 12000,
+        quantity: 2,
+        image: initialProducts[3].image,
+        notes: 'Telur setengah matang',
+      },
+      {
+        productId: 'PROD-002',
+        productName: 'Es Teh Manis Segar',
+        price: 5000,
+        quantity: 2,
+        image: initialProducts[1].image,
+      },
+    ],
+    subtotal: 34000,
+    tax: 3400,
+    total: 37400,
+    paymentMethod: 'Bayar di Kasir (Tunai)',
+    status: 'SIAP',
+    isPaid: true,
+    source: 'QR_CATALOG',
+  },
+];
+

@@ -213,8 +213,6 @@ export const TransactionsView: React.FC = () => {
   // Helper for Payment Icon
   const getPaymentIcon = (method: PaymentMethod) => {
     switch (method) {
-      case 'QRIS':
-        return <QrCode className="h-3.5 w-3.5 text-[#4648d4]" />;
       case 'Tunai':
         return <Banknote className="h-3.5 w-3.5 text-emerald-600" />;
       case 'Transfer Bank':

@@ -19,6 +19,8 @@ import { SettingsView } from './views/SettingsView';
 import { BackupView } from './views/BackupView';
 import { AuthView } from './views/AuthView';
 import { SuperAdminView } from './views/SuperAdminView';
+import { OrdersQueueView } from './views/OrdersQueueView';
+import { CustomerCatalogView } from './views/CustomerCatalogView';
 
 // Modals
 import { PaymentModal } from './components/modals/PaymentModal';
@@ -26,16 +28,20 @@ import { ReceiptModal } from './components/modals/ReceiptModal';
 import { AddProductModal } from './components/modals/AddProductModal';
 import { AddExpenseModal } from './components/modals/AddExpenseModal';
 import { EmailInboxSimulationModal } from './components/modals/EmailInboxSimulationModal';
+import { CustomerCatalogQRModal } from './components/modals/CustomerCatalogQRModal';
 import { LicenseExpirationAlert } from './components/LicenseExpirationAlert';
 import { Product } from './types';
 
 const MainAppContent: React.FC = () => {
   const {
     currentTab,
+    setCurrentTab,
     isMobileSimulation,
     currentUser,
     isSuperAdminOpen,
     setIsSuperAdminOpen,
+    isCatalogQRModalOpen,
+    setIsCatalogQRModalOpen,
     currentLicense,
   } = useApp();
 
@@ -85,6 +91,33 @@ const MainAppContent: React.FC = () => {
     );
   }
 
+  // Direct customer catalog mode (when scanning QR with ?mode=katalog or #katalog)
+  const isDirectCatalogMode =
+    currentTab === 'customer_catalog' ||
+    (typeof window !== 'undefined' &&
+      (window.location.hash === '#katalog' ||
+        new URLSearchParams(window.location.search).get('mode') === 'katalog'));
+
+  if (isDirectCatalogMode) {
+    return (
+      <div className="min-h-screen bg-[#f8f9fe]">
+        <CustomerCatalogView
+          onBackToApp={
+            currentUser
+              ? () => {
+                  setCurrentTab('pos');
+                  if (window.location.hash === '#katalog') {
+                    window.location.hash = '';
+                  }
+                }
+              : undefined
+          }
+        />
+        <ToastContainer />
+      </div>
+    );
+  }
+
   // If user is not logged in or in login tab, show full Auth gateway
   if (!currentUser || currentTab === 'login') {
     return (
@@ -112,6 +145,18 @@ const MainAppContent: React.FC = () => {
         return <DashboardView />;
       case 'pos':
         return <POSView />;
+      case 'orders':
+        return (
+          <OrdersQueueView
+            onOpenQRModal={() => setIsCatalogQRModalOpen(true)}
+          />
+        );
+      case 'customer_catalog':
+        return (
+          <CustomerCatalogView
+            onBackToApp={() => setCurrentTab('pos')}
+          />
+        );
       case 'transactions':
         return <TransactionsView />;
       case 'products':
@@ -166,6 +211,10 @@ const MainAppContent: React.FC = () => {
       <PaymentModal />
       <ReceiptModal />
       <EmailInboxSimulationModal />
+      <CustomerCatalogQRModal
+        isOpen={isCatalogQRModalOpen}
+        onClose={() => setIsCatalogQRModalOpen(false)}
+      />
       <AddProductModal
         isOpen={isAddProductOpen}
         onClose={() => {
