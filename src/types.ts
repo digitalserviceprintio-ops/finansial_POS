@@ -86,6 +86,12 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface CartDiscount {
+  type: 'percentage' | 'nominal';
+  value: number;
+  note?: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
