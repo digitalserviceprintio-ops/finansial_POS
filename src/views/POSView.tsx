@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Plus,
@@ -21,6 +21,9 @@ import {
   Building2,
   Smartphone,
   ExternalLink,
+  Mic,
+  MicOff,
+  Volume2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ProductCategory, Product, PaymentMethod } from '../types';
@@ -52,6 +55,106 @@ export const POSView: React.FC = () => {
   const [posSearchQuery, setPosSearchQuery] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+
+  const recognitionRef = useRef<any>(null);
+
+  // Check Web Speech API support
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceSupported(false);
+    }
+  }, []);
+
+  const startVoiceSearch = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      showToast('Browser Anda belum mendukung input suara. Gunakan Chrome atau Edge.', 'warning');
+      return;
+    }
+
+    if (isListening) {
+      // Stop listening
+      try {
+        recognitionRef.current?.stop();
+      } catch (e) {
+        // ignore
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'id-ID'; // Bahasa Indonesia
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setVoiceTranscript('');
+        showToast('🎙️ Mendengarkan suara... Ucapkan nama produk', 'info');
+      };
+
+      recognition.onresult = (event: any) => {
+        const current = event.resultIndex;
+        const transcript = event.results[current][0].transcript;
+        setVoiceTranscript(transcript);
+        setPosSearchQuery(transcript);
+
+        if (event.results[current].isFinal) {
+          setIsListening(false);
+          // Try to auto-match product if exact match or clear match
+          const cleanVoice = transcript.trim().toLowerCase();
+          const matched = products.find(
+            (p) =>
+              p.name.toLowerCase().includes(cleanVoice) ||
+              cleanVoice.includes(p.name.toLowerCase()) ||
+              p.sku.toLowerCase() === cleanVoice
+          );
+
+          if (matched) {
+            if (matched.stock > 0 && matched.isAvailable) {
+              showToast(`Suara terdeteksi: "${transcript}" - Produk ditemukan!`, 'success');
+            } else {
+              showToast(`Suara terdeteksi: "${transcript}" (Stok habis)`, 'warning');
+            }
+          } else {
+            showToast(`Suara terdeteksi: "${transcript}"`, 'info');
+          }
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          showToast('Izin mikrofon ditolak. Izinkan akses mikrofon di browser.', 'warning');
+        } else if (event.error === 'no-speech') {
+          showToast('Tidak ada suara terdeteksi. Silakan coba lagi.', 'info');
+        } else {
+          showToast(`Gagal memproses suara: ${event.error}`, 'warning');
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error('Speech recognition error:', err);
+      setIsListening(false);
+      showToast('Tidak dapat mengaktifkan mikrofon.', 'warning');
+    }
+  };
 
   const categoryNames: string[] = ['Semua', ...appCategories.map((c) => c.name)];
   const activeOrdersCount = customerOrders.filter(
@@ -72,6 +175,11 @@ export const POSView: React.FC = () => {
         e.preventDefault();
         setIsBarcodeScannerOpen(true);
       }
+      // F3 triggers voice search
+      if (e.key === 'F3' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm')) {
+        e.preventDefault();
+        startVoiceSearch();
+      }
       // F4 opens customer catalog QR
       if (e.key === 'F4') {
         e.preventDefault();
@@ -90,7 +198,7 @@ export const POSView: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart.length, setPendingPaymentMethod, setIsPaymentModalOpen, setIsCatalogQRModalOpen, showToast]);
+  }, [cart.length, setPendingPaymentMethod, setIsPaymentModalOpen, setIsCatalogQRModalOpen, showToast, isListening]);
 
   // Filter products by category and search query
   const filteredProducts = products.filter((p) => {
@@ -197,6 +305,26 @@ export const POSView: React.FC = () => {
               )}
             </button>
 
+            {/* Suara Voice Search Quick Button */}
+            <button
+              type="button"
+              onClick={startVoiceSearch}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-2xl text-[11px] font-bold backdrop-blur-xs transition-all cursor-pointer shadow-xs active:scale-95 ${
+                isListening
+                  ? 'bg-rose-500 text-white animate-pulse ring-2 ring-white/50'
+                  : 'bg-white/15 hover:bg-white/25 text-white'
+              }`}
+              title="Cari Produk dengan Suara (F3)"
+            >
+              {isListening ? (
+                <Volume2 className="h-4 w-4 text-amber-200 animate-bounce" />
+              ) : (
+                <Mic className="h-4 w-4 text-amber-300" />
+              )}
+              <span className="hidden sm:inline">{isListening ? 'Mendengarkan...' : 'Suara (F3)'}</span>
+              <span className="sm:hidden">{isListening ? 'Mendengar' : 'Suara'}</span>
+            </button>
+
             {/* Barcode Camera Scan */}
             <button
               type="button"
@@ -220,20 +348,53 @@ export const POSView: React.FC = () => {
                 <input
                   id="pos-search-product"
                   type="text"
-                  placeholder="Cari menu / scan barcode SKU (Tekan Enter)..."
+                  placeholder="Cari menu / scan barcode / tekan F3 untuk suara..."
                   value={posSearchQuery}
                   onChange={(e) => setPosSearchQuery(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  className="w-full rounded-2xl border border-[#d2d1dc] bg-[#fcf8ff] py-2.5 pl-10 pr-8 text-xs sm:text-sm text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4648d4]/20"
+                  className={`w-full rounded-2xl border py-2.5 pl-10 pr-18 text-xs sm:text-sm text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4648d4]/20 transition-all ${
+                    isListening
+                      ? 'border-rose-400 bg-rose-50/50 ring-2 ring-rose-300'
+                      : 'border-[#d2d1dc] bg-[#fcf8ff]'
+                  }`}
                 />
-                {posSearchQuery && (
+
+                {/* Right action icons: Clear & Voice Input */}
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {posSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setPosSearchQuery('')}
+                      className="p-1 text-xs text-[#767680] hover:text-[#1b1b23] cursor-pointer rounded-full hover:bg-slate-200/50"
+                      title="Hapus pencarian"
+                    >
+                      ✕
+                    </button>
+                  )}
+
                   <button
-                    onClick={() => setPosSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#767680] hover:text-[#1b1b23] cursor-pointer"
+                    type="button"
+                    onClick={startVoiceSearch}
+                    className={`p-1.5 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
+                      isListening
+                        ? 'bg-rose-600 text-white animate-pulse shadow-xs'
+                        : 'text-[#4648d4] hover:bg-[#ebeaff]'
+                    }`}
+                    title={
+                      voiceSupported
+                        ? isListening
+                          ? 'Klik untuk berhenti mendengar'
+                          : 'Cari dengan Suara (F3)'
+                        : 'Browser tidak mendukung Web Speech API'
+                    }
                   >
-                    ✕
+                    {isListening ? (
+                      <MicOff className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
                   </button>
-                )}
+                </div>
               </div>
 
               {/* Barcode Scanner Button */}
@@ -287,6 +448,34 @@ export const POSView: React.FC = () => {
               );
             })}
           </div>
+
+          {/* Voice Search Active Status Bar */}
+          {isListening && (
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-md animate-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0 animate-bounce">
+                  <Mic className="h-4 w-4 text-amber-200" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black leading-tight flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-amber-300 animate-ping" />
+                    <span>Mendengarkan Suara Kasir...</span>
+                  </p>
+                  <p className="text-[11px] text-rose-100 truncate mt-0.5 font-medium">
+                    {voiceTranscript ? `"${voiceTranscript}"` : 'Sebutkan nama produk (contoh: "Kopi Susu", "Ayam Bakar")...'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={startVoiceSearch}
+                className="px-3 py-1.5 rounded-xl bg-white text-rose-700 text-xs font-black shadow-xs hover:bg-rose-50 active:scale-95 transition-all shrink-0 cursor-pointer"
+              >
+                Selesai
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Product Cards Grid */}
