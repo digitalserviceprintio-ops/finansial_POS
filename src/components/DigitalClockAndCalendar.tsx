@@ -137,32 +137,32 @@ export const DigitalClockAndCalendar: React.FC<{ compact?: boolean }> = ({ compa
       <button
         id="btn-open-clock-calendar"
         onClick={() => setShowCalendarPopover(!showCalendarPopover)}
-        className={`flex items-center gap-2 rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-2.5 sm:px-3.5 py-1.5 transition-all hover:border-[#4648d4]/40 hover:bg-[#ebeaff]/40 active:scale-98 ${
+        className={`flex items-center gap-1.5 sm:gap-2 rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-2 sm:px-3 py-1.5 transition-all hover:border-[#4648d4]/40 hover:bg-[#ebeaff]/40 active:scale-98 cursor-pointer ${
           showCalendarPopover ? 'border-[#4648d4] ring-2 ring-[#4648d4]/20 bg-[#ebeaff]/60' : ''
         }`}
         title="Klik untuk membuka Kalender & Rekap Transaksi"
       >
         {/* Live Digital Clock */}
-        <div className="flex items-center gap-1.5 font-mono">
-          <Clock className="h-3.5 w-3.5 text-[#4648d4] animate-pulse" />
+        <div className="flex items-center gap-1 sm:gap-1.5 font-mono">
+          <Clock className="h-3.5 w-3.5 text-[#4648d4] animate-pulse shrink-0" />
           <span className="text-xs sm:text-sm font-bold text-[#1b1b23] tracking-tight">
             {hours}:{minutes}
-            <span className="text-[10px] text-[#4648d4] font-semibold ml-0.5">:{seconds}</span>
+            <span className="text-[10px] text-[#4648d4] font-semibold hidden md:inline ml-0.5">:{seconds}</span>
           </span>
         </div>
 
         {/* Divider */}
-        <div className="h-3.5 w-[1px] bg-[#d2d1dc]"></div>
+        <div className="h-3.5 w-[1px] bg-[#d2d1dc] hidden sm:block"></div>
 
         {/* Live Date display */}
-        <div className="flex items-center gap-1 text-[11px] font-semibold text-[#46464f]">
-          <CalendarIcon className="h-3 w-3 text-[#767680] hidden sm:inline" />
-          <span className="truncate max-w-[120px] sm:max-w-none">
+        <div className="hidden sm:flex items-center gap-1 text-[11px] font-semibold text-[#46464f]">
+          <CalendarIcon className="h-3 w-3 text-[#767680] hidden md:inline shrink-0" />
+          <span className="truncate max-w-[100px] md:max-w-none">
             {compact ? dateFormattedIndo : `${dayNameIndo}, ${dateFormattedIndo}`}
           </span>
         </div>
 
-        <span className="hidden xl:inline rounded bg-emerald-100 px-1.5 py-0.2 text-[9px] font-bold text-emerald-800">
+        <span className="hidden 2xl:inline rounded bg-emerald-100 px-1.5 py-0.2 text-[9px] font-bold text-emerald-800">
           WIB
         </span>
       </button>
@@ -172,11 +172,11 @@ export const DigitalClockAndCalendar: React.FC<{ compact?: boolean }> = ({ compa
         <>
           {/* Backdrop on mobile */}
           <div
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-2xs md:hidden"
+            className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-2xs md:hidden"
             onClick={() => setShowCalendarPopover(false)}
           />
 
-          <div className="absolute right-0 top-full mt-2 z-50 w-80 sm:w-96 rounded-3xl border border-[#e2e1ec] bg-white p-4 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-full mt-2 z-50 w-[calc(100vw-1.5rem)] sm:w-96 max-w-sm rounded-3xl border border-[#e2e1ec] bg-white p-4 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150">
             {/* Popover Header */}
             <div className="flex items-center justify-between border-b border-[#f3f2fa] pb-3">
               <div className="flex items-center gap-2">

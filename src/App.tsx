@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { AppProvider, useApp } from './context/AppContext';
 import { TopHeader } from './components/TopHeader';
 import { Sidebar } from './components/Sidebar';
@@ -21,6 +22,7 @@ import { AuthView } from './views/AuthView';
 import { SuperAdminView } from './views/SuperAdminView';
 import { OrdersQueueView } from './views/OrdersQueueView';
 import { CustomerCatalogView } from './views/CustomerCatalogView';
+import { GoogleAppsScriptView } from './views/GoogleAppsScriptView';
 
 // Modals
 import { PaymentModal } from './components/modals/PaymentModal';
@@ -181,6 +183,8 @@ const MainAppContent: React.FC = () => {
         return <FinanceReportView onOpenAddExpenseModal={() => setIsAddExpenseOpen(true)} />;
       case 'backup':
         return <BackupView />;
+      case 'google_apps_script':
+        return <GoogleAppsScriptView />;
       case 'about':
         return <AboutView />;
       case 'settings':
@@ -199,9 +203,20 @@ const MainAppContent: React.FC = () => {
       <div className="flex flex-1 overflow-hidden relative">
         <Sidebar />
 
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-24 lg:pb-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 overflow-y-auto no-scrollbar p-3.5 sm:p-4 md:p-6 lg:p-8 pb-28 lg:pb-8 max-w-7xl mx-auto w-full">
           <LicenseExpirationAlert />
-          {renderActiveView()}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentTab}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="w-full"
+            >
+              {renderActiveView()}
+            </motion.div>
+          </AnimatePresence>
         </main>
 
         <BottomNav />

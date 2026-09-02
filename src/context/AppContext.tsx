@@ -16,6 +16,8 @@ import {
   InAppNotification,
   CustomerOrder,
   CustomerOrderStatus,
+  GoogleSheetsConfig,
+  GoogleSheetsSyncLog,
 } from '../types';
 import {
   initialProducts,
@@ -28,6 +30,7 @@ import {
 } from '../data/mockData';
 import { SecureVault, generateTenantId } from '../utils/security';
 import { LicenseManager } from '../utils/licenseManager';
+import { sendPayloadToGoogleAppsScript } from '../utils/googleAppsScript';
 
 interface ToastNotification {
   id: string;
@@ -170,6 +173,14 @@ interface AppContextType {
   isCatalogQRModalOpen: boolean;
   setIsCatalogQRModalOpen: (open: boolean) => void;
 
+  // Google Apps Script & Google Spreadsheet Integration
+  googleSheetsConfig: GoogleSheetsConfig;
+  updateGoogleSheetsConfig: (config: Partial<GoogleSheetsConfig>) => void;
+  googleSheetsSyncLogs: GoogleSheetsSyncLog[];
+  syncAllToGoogleSheets: () => Promise<{ success: boolean; message: string }>;
+  testGoogleSheetsConnection: () => Promise<{ success: boolean; message: string }>;
+  clearGoogleSheetsLogs: () => void;
+
   // Utilities
   formatCurrency: (amount: number) => string;
 }
@@ -211,7 +222,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [reportSubTab, setReportSubTab] = useState<ReportSubTab>('cashflow');
   const [isMobileSimulation, setIsMobileSimulation] = useState<boolean>(false);
   const [searchGlobalQuery, setSearchGlobalQuery] = useState<string>('');
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
+    return typeof window !== 'undefined' ? window.innerWidth >= 1024 : false;
+  });
+
+  // Google Apps Script & Google Sheets Sync State
+  const [googleSheetsConfig, setGoogleSheetsConfig] = useState<GoogleSheetsConfig>(() => {
+    const saved = localStorage.getItem('delpos_google_sheets_config');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // ignore
+      }
+    }
+    return {
+      enabled: false,
+      webAppUrl: '',
+      autoSyncTransactions: true,
+      autoSyncProducts: true,
+      autoSyncExpenses: true,
+      autoSyncOrders: true,
+      lastSyncStatus: 'idle',
+    };
+  });
+
+  const [googleSheetsSyncLogs, setGoogleSheetsSyncLogs] = useState<GoogleSheetsSyncLog[]>(() => {
+    const saved = localStorage.getItem('delpos_google_sheets_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Auto-persist Google Sheets Config & Logs
+  useEffect(() => {
+    localStorage.setItem('delpos_google_sheets_config', JSON.stringify(googleSheetsConfig));
+  }, [googleSheetsConfig]);
+
+  useEffect(() => {
+    localStorage.setItem('delpos_google_sheets_logs', JSON.stringify(googleSheetsSyncLogs.slice(0, 50)));
+  }, [googleSheetsSyncLogs]);
 
   // Auth & User Management
   const [registeredUsers, setRegisteredUsers] = useState<AuthUser[]>(() => {
@@ -822,11 +870,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setProducts((prev) => [newProduct, ...prev]);
     showToast(`Produk "${newProduct.name}" berhasil ditambahkan`, 'success');
+    triggerBackgroundSync('PRODUCT', newProduct, `Tambah Produk ${newProduct.name}`);
   };
 
   const updateProduct = (id: string, updated: Partial<Product>) => {
     setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updated } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          const merged = { ...p, ...updated };
+          triggerBackgroundSync('PRODUCT', merged, `Update Produk ${merged.name}`);
+          return merged;
+        }
+        return p;
+      })
     );
     showToast('Produk berhasil diperbarui', 'success');
   };
@@ -913,6 +969,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setExpenses((prev) => [newExpense, ...prev]);
     showToast(`Pengeluaran Rp ${expData.amount.toLocaleString()} berhasil dicatat`, 'success');
+    triggerBackgroundSync('EXPENSE', newExpense, `Beban Kas Rp ${expData.amount.toLocaleString()}`);
   };
 
   const deleteExpense = (id: string) => {
@@ -1102,6 +1159,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsReceiptModalOpen(true);
     showToast(`Transaksi ${orderNum} berhasil!`, 'success');
 
+    // Trigger auto-sync to Google Spreadsheet
+    triggerBackgroundSync('TRANSACTION', newTransaction, `Transaksi ${orderNum}`);
+
     return newTransaction;
   };
 
@@ -1160,6 +1220,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type: 'new_order',
       urgency: 'critical',
     });
+
+    // Auto-sync customer order to Google Sheets
+    triggerBackgroundSync('ORDER', newOrder, `Antrian #${queueNumber}`);
 
     return newOrder;
   };
@@ -1242,6 +1305,166 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsPaymentModalOpen(true);
     setPendingPaymentMethod(order.paymentMethod === 'Transfer Bank' ? 'Transfer Bank' : 'Tunai');
     showToast(`Pesanan #${order.queueNumber} (${order.customerName}) dimuat ke Kasir POS`, 'success');
+  };
+
+  // =========================================================
+  // GOOGLE APPS SCRIPT / GOOGLE SHEETS INTEGRATION METHODS
+  // =========================================================
+  const updateGoogleSheetsConfig = (cfg: Partial<GoogleSheetsConfig>) => {
+    setGoogleSheetsConfig((prev) => ({ ...prev, ...cfg }));
+    showToast('Konfigurasi Google Sheets berhasil diperbarui', 'success');
+  };
+
+  const clearGoogleSheetsLogs = () => {
+    setGoogleSheetsSyncLogs([]);
+    showToast('Riwayat sinkronisasi telah dibersihkan', 'info');
+  };
+
+  const logSyncActivity = (
+    action: GoogleSheetsSyncLog['action'],
+    status: GoogleSheetsSyncLog['status'],
+    summary: string,
+    details?: string,
+    itemsCount?: number
+  ) => {
+    const newLog: GoogleSheetsSyncLog = {
+      id: `SYNC-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: Date.now(),
+      action,
+      status,
+      summary,
+      details,
+      itemsCount,
+    };
+    setGoogleSheetsSyncLogs((prev) => [newLog, ...prev.slice(0, 49)]);
+  };
+
+  const triggerBackgroundSync = async (
+    action: 'TRANSACTION' | 'PRODUCT' | 'EXPENSE' | 'ORDER',
+    data: any,
+    label: string
+  ) => {
+    if (!googleSheetsConfig.enabled || !googleSheetsConfig.webAppUrl) return;
+
+    if (action === 'TRANSACTION' && !googleSheetsConfig.autoSyncTransactions) return;
+    if (action === 'PRODUCT' && !googleSheetsConfig.autoSyncProducts) return;
+    if (action === 'EXPENSE' && !googleSheetsConfig.autoSyncExpenses) return;
+    if (action === 'ORDER' && !googleSheetsConfig.autoSyncOrders) return;
+
+    try {
+      const res = await sendPayloadToGoogleAppsScript(
+        googleSheetsConfig.webAppUrl,
+        action,
+        data,
+        storeProfile
+      );
+      if (res.success) {
+        logSyncActivity(action, 'SUCCESS', `Auto-sync: ${label} tercatat di Google Sheets`);
+        setGoogleSheetsConfig((prev) => ({
+          ...prev,
+          lastSyncTimestamp: Date.now(),
+          lastSyncStatus: 'success',
+          lastSyncMessage: `${label} tersinkron`,
+        }));
+      } else {
+        logSyncActivity(action, 'FAILED', `Gagal auto-sync ${label}`, res.message);
+        setGoogleSheetsConfig((prev) => ({
+          ...prev,
+          lastSyncTimestamp: Date.now(),
+          lastSyncStatus: 'error',
+          lastSyncMessage: res.message,
+        }));
+      }
+    } catch (e: any) {
+      logSyncActivity(action, 'FAILED', `Error auto-sync ${label}`, e.message);
+    }
+  };
+
+  const syncAllToGoogleSheets = async (): Promise<{ success: boolean; message: string }> => {
+    if (!googleSheetsConfig.webAppUrl) {
+      showToast('Harap masukkan URL Web App Google Apps Script terlebih dahulu', 'warning');
+      return { success: false, message: 'URL Web App belum diisi' };
+    }
+
+    showToast('Memulai sinkronisasi seluruh data ke Google Spreadsheet...', 'info');
+    const fullPayload = {
+      store: storeProfile,
+      products,
+      transactions,
+      expenses,
+      customerOrders,
+    };
+
+    const res = await sendPayloadToGoogleAppsScript(
+      googleSheetsConfig.webAppUrl,
+      'FULL_SYNC',
+      fullPayload,
+      storeProfile
+    );
+
+    if (res.success) {
+      const msg = '🎉 Seluruh data produk, transaksi, & kas berhasil disinkronkan ke Google Spreadsheet!';
+      showToast(msg, 'success');
+      logSyncActivity(
+        'FULL_SYNC',
+        'SUCCESS',
+        'Sinkronisasi Massal Lengkap Berhasil',
+        `${products.length} Produk, ${transactions.length} Transaksi, ${expenses.length} Biaya`,
+        products.length + transactions.length + expenses.length
+      );
+      setGoogleSheetsConfig((prev) => ({
+        ...prev,
+        enabled: true,
+        lastSyncTimestamp: Date.now(),
+        lastSyncStatus: 'success',
+        lastSyncMessage: 'Sinkronisasi penuh sukses',
+      }));
+      return { success: true, message: msg };
+    } else {
+      showToast(res.message, 'error');
+      logSyncActivity('FULL_SYNC', 'FAILED', 'Sinkronisasi Massal Gagal', res.message);
+      setGoogleSheetsConfig((prev) => ({
+        ...prev,
+        lastSyncTimestamp: Date.now(),
+        lastSyncStatus: 'error',
+        lastSyncMessage: res.message,
+      }));
+      return { success: false, message: res.message };
+    }
+  };
+
+  const testGoogleSheetsConnection = async (): Promise<{ success: boolean; message: string }> => {
+    if (!googleSheetsConfig.webAppUrl) {
+      return { success: false, message: 'Harap masukkan URL Web App Google Apps Script.' };
+    }
+
+    const res = await sendPayloadToGoogleAppsScript(
+      googleSheetsConfig.webAppUrl,
+      'TEST_PING',
+      { ping: true, store: storeProfile.name },
+      storeProfile
+    );
+
+    if (res.success) {
+      logSyncActivity('TEST_PING', 'SUCCESS', 'Tes koneksi Google Apps Script berhasil aktif');
+      setGoogleSheetsConfig((prev) => ({
+        ...prev,
+        enabled: true,
+        lastSyncTimestamp: Date.now(),
+        lastSyncStatus: 'success',
+        lastSyncMessage: 'Koneksi terhubung optimal',
+      }));
+      return { success: true, message: '✅ Koneksi Google Apps Script berhasil! Spreadsheet siap mencatat data.' };
+    } else {
+      logSyncActivity('TEST_PING', 'FAILED', 'Tes koneksi gagal', res.message);
+      setGoogleSheetsConfig((prev) => ({
+        ...prev,
+        lastSyncTimestamp: Date.now(),
+        lastSyncStatus: 'error',
+        lastSyncMessage: res.message,
+      }));
+      return { success: false, message: res.message };
+    }
   };
 
   return (
@@ -1337,6 +1560,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transferOrderToPOSCart,
         isCatalogQRModalOpen,
         setIsCatalogQRModalOpen,
+        googleSheetsConfig,
+        updateGoogleSheetsConfig,
+        googleSheetsSyncLogs,
+        syncAllToGoogleSheets,
+        testGoogleSheetsConnection,
+        clearGoogleSheetsLogs,
       }}
     >
       {children}

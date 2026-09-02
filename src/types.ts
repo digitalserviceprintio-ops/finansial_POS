@@ -12,6 +12,7 @@ export type MainTab =
   | 'customers'
   | 'cashflow'
   | 'reports'
+  | 'google_apps_script'
   | 'backup'
   | 'settings'
   | 'about'
@@ -300,5 +301,29 @@ export interface AuditLogEntry {
   details: string;
   metadata?: Record<string, any>;
   ipAddress?: string;
+}
+
+// Google Apps Script & Google Sheets Integration Types
+export interface GoogleSheetsConfig {
+  enabled: boolean;
+  webAppUrl: string;
+  sheetNamePrefix?: string;
+  autoSyncTransactions: boolean;
+  autoSyncProducts: boolean;
+  autoSyncExpenses: boolean;
+  autoSyncOrders: boolean;
+  lastSyncTimestamp?: number;
+  lastSyncStatus?: 'success' | 'error' | 'idle';
+  lastSyncMessage?: string;
+}
+
+export interface GoogleSheetsSyncLog {
+  id: string;
+  timestamp: number;
+  action: 'TRANSACTION' | 'PRODUCT' | 'EXPENSE' | 'ORDER' | 'FULL_SYNC' | 'TEST_PING';
+  status: 'SUCCESS' | 'FAILED';
+  summary: string;
+  details?: string;
+  itemsCount?: number;
 }
 

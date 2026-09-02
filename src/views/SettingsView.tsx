@@ -350,6 +350,39 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
+      {/* Integrasi Google Spreadsheet & Apps Script Live Banner Card */}
+      <div className="bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-slate-50 p-6 rounded-3xl border border-emerald-300 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-700 text-white shadow-md">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  Integrasi Google Spreadsheet & Apps Script (Live Sync)
+                </h3>
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                  Auto-Record
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Setiap transaksi kasir, perubahan produk, dan pengeluaran kas langsung tercatat otomatis ke tabel Google Sheets.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setCurrentTab('google_apps_script')}
+            className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 transition-all shrink-0"
+          >
+            <span>Buka Integrasi Google Spreadsheet</span>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Cadangan & Pemulihan Data Banner Card */}
       <div className="bg-gradient-to-br from-[#ebeaff] via-[#fcf8ff] to-[#f3f2fa] p-6 rounded-3xl border border-[#d8d6fc] shadow-xs space-y-4">
         <div className="flex items-center justify-between">
