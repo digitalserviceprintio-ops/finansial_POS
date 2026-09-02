@@ -19,6 +19,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { DelPOSLogo } from '../components/brand/DelPOSLogo';
 import { DelPOSFeatureBadges } from '../components/brand/DelPOSFeatureBadges';
+import { APP_CONFIG } from '../utils/appConfig';
 
 export const AboutView: React.FC = () => {
   const { setCurrentTab, storeProfile } = useApp();
@@ -26,16 +27,16 @@ export const AboutView: React.FC = () => {
 
   const faqs = [
     {
-      q: 'Bagaimana cara melakukan transaksi penjualan di DelPOS?',
+      q: `Bagaimana cara melakukan transaksi penjualan di ${APP_CONFIG.brand}?`,
       a: 'Pada menu Penjualan (POS), pilih produk yang diinginkan atau scan barcode, lalu klik tombol bayar Tunai, QRIS Dinamis, atau Transfer Bank. Struk thermal otomatis dapat dicetak ke printer Bluetooth atau RawBT.',
     },
     {
-      q: 'Apakah DelPOS mendukung antrian pesanan dengan Katalog Mandiri?',
+      q: `Apakah ${APP_CONFIG.brand} mendukung antrian pesanan dengan Katalog Mandiri?`,
       a: 'Ya! Pelanggan dapat scan QR katalog mandiri dari smartphone mereka, memilih menu makanan/minuman/produk, mengirim pesanan, dan kasir dapat mencetak struk antrian thermal berformat ritel modern.',
     },
     {
       q: 'Apakah laporan laba rugi sudah sesuai standar SAK EMKM?',
-      a: 'Ya! Laporan Finansial DelPOS dirancang otomatis menghitung Penjualan Bersih, Harga Pokok Penjualan (HPP), Laba Kotor, dan Beban Operasional untuk menghasilkan Laba Bersih akurat.',
+      a: `Ya! Laporan Finansial ${APP_CONFIG.brand} dirancang otomatis menghitung Penjualan Bersih, Harga Pokok Penjualan (HPP), Laba Kotor, dan Beban Operasional untuk menghasilkan Laba Bersih akurat.`,
     },
     {
       q: 'Bagaimana cara menambahkan produk baru ke katalog kasir?',
@@ -43,7 +44,7 @@ export const AboutView: React.FC = () => {
     },
     {
       q: 'Apakah data transaksi dan kas tersimpan secara aman?',
-      a: 'Semua data transaksi, katalog produk, dan pembukuan arus kas tersimpan secara aman dan dapat diekspor kapan saja ke format CSV.',
+      a: 'Semua data transaksi, katalog produk, dan pembukuan arus kas tersimpan secara aman dan dapat diekspor kapan saja ke format CSV atau disinkronkan ke Google Spreadsheet.',
     },
   ];
 
@@ -58,7 +59,7 @@ export const AboutView: React.FC = () => {
           <div className="space-y-4">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3.5 py-1 text-xs font-bold backdrop-blur-xs">
               <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-              <span>DelPOS - Versi 1.2.0 (powered by AkuPos)</span>
+              <span>{APP_CONFIG.brand} - Versi {APP_CONFIG.version}</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
               Solusi Kasir POS & Pembukuan Finansial Lengkap
@@ -70,13 +71,13 @@ export const AboutView: React.FC = () => {
             <div className="flex flex-wrap gap-3 pt-2">
               <button
                 onClick={() => setCurrentTab('pos')}
-                className="rounded-xl bg-white px-5 py-2.5 text-xs font-bold text-[#0055EE] shadow-md hover:bg-slate-50 transition-all"
+                className="rounded-xl bg-white px-5 py-2.5 text-xs font-bold text-[#0055EE] shadow-md hover:bg-slate-50 transition-all cursor-pointer"
               >
                 Mulai Transaksi Kasir
               </button>
               <button
                 onClick={() => setCurrentTab('orders')}
-                className="rounded-xl border border-white/40 bg-white/10 px-5 py-2.5 text-xs font-bold text-white hover:bg-white/20 transition-all"
+                className="rounded-xl border border-white/40 bg-white/10 px-5 py-2.5 text-xs font-bold text-white hover:bg-white/20 transition-all cursor-pointer"
               >
                 Lihat Antrian Pesanan
               </button>
@@ -86,7 +87,7 @@ export const AboutView: React.FC = () => {
           {/* 3D Brand Badge / Illustration */}
           <div className="flex justify-center">
             <div className="relative flex flex-col items-center justify-center p-6 sm:p-8 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl">
-              <DelPOSLogo variant="splash" size="2xl" showPoweredBy={true} />
+              <DelPOSLogo variant="splash" size="2xl" showPoweredBy={false} />
             </div>
           </div>
         </div>
@@ -94,7 +95,7 @@ export const AboutView: React.FC = () => {
 
       {/* 4 Feature Badges Grid (Directly from User Image) */}
       <div>
-        <h2 className="text-base font-bold text-[#1b1b23] mb-3">Keunggulan Utama DelPOS</h2>
+        <h2 className="text-base font-bold text-[#1b1b23] mb-3">Keunggulan Utama {APP_CONFIG.brand}</h2>
         <DelPOSFeatureBadges layout="grid" />
       </div>
 
@@ -194,7 +195,7 @@ export const AboutView: React.FC = () => {
           <DelPOSLogo variant="icon-only" size="md" />
           <div>
             <p className="font-bold text-[#1b1b23]">Butuh Bantuan Lebih Lanjut?</p>
-            <p className="text-[#767680]">Hubungi tim dukungan DelPOS powered by AkuPos</p>
+            <p className="text-[#767680]">Hubungi tim dukungan resmi {APP_CONFIG.brand}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">

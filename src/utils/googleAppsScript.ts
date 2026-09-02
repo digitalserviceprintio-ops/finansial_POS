@@ -1,18 +1,19 @@
 /**
- * Google Apps Script Integration Helper & Code Generator for DelPOS (powered by AkuPos)
+ * Google Apps Script Integration Helper & Code Generator for DelPos
  * Enables seamless two-way ready integration to Google Spreadsheets
  */
 
 import { Transaction, Product, ExpenseRecord, CustomerOrder, StoreProfile } from '../types';
+import { APP_CONFIG } from './appConfig';
 
 export const DEFAULT_GOOGLE_APPS_SCRIPT_CODE = `/**
  * =========================================================================
- * DELPOS (POWERED BY AKUPOS) - GOOGLE APPS SCRIPT WEBHOOK ENDPOINT (Code.gs)
+ * DELPOS - GOOGLE APPS SCRIPT AUTO-SYNC WEBHOOK (Code.gs)
  * =========================================================================
  * 
  * Script ini secara otomatis mengelola pencatatan tabel Google Spreadsheet:
  *  1. Sheet "Transaksi_Penjualan" : Rekap setiap transaksi kasir real-time.
- *  2. Sheet "Master_Produk"       : Katalog produk, harga beli/jual & stok fisik.
+ *  2. Sheet "Master_Produk"       : Katalog produk, harga beli/jual & stok fisik (otomatis berkurang saat transaksi).
  *  3. Sheet "Biaya_Operasional"   : Buku kas pengeluaran operasional.
  *  4. Sheet "Antrian_Pesanan"     : Pesanan masuk dari QR Katalog Mandiri.
  *  5. Sheet "Ringkasan_Bisnis"    : Dashboard otomatis metrik pendapatan & laba.
@@ -24,41 +25,54 @@ export const DEFAULT_GOOGLE_APPS_SCRIPT_CODE = `/**
  * 4. Klik tombol 'Deploy' (Terapkan) berwarna biru di kanan atas > 'Deployment baru' (New deployment).
  * 5. Pilih jenis deployment: 'Aplikasi Web' (Web app).
  * 6. Konfigurasi:
- *    - Deskripsi: DelPOS Auto Sync Webhook
+ *    - Deskripsi: DelPos Auto Sync Webhook
  *    - Jalankan sebagai (Execute as): Saya (email Anda)
  *    - Siapa yang memiliki akses (Who has access): Siapa saja (Anyone) -> WAJIB agar POS bisa kirim data!
- * 7. Klik 'Terapkan' (Deploy), izinkan akses (Review permissions > Pilih akun > Lanjutan > Buka DelPOS Webhook).
- * 8. Salin URL Aplikasi Web (berakhiran /exec) dan tempelkan ke menu DelPOS > Integrasi Google Spreadsheet.
+ * 7. Klik 'Terapkan' (Deploy), izinkan akses (Review permissions > Pilih akun > Lanjutan > Buka DelPos Webhook).
+ * 8. Salin URL Aplikasi Web (berakhiran /exec) dan tempelkan ke menu DelPos > Integrasi Google Spreadsheet.
  */
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  try {
+    lock.tryLock(15000);
+  } catch (lockErr) {
+    // Continue even if lock was busy
+  }
 
   try {
-    var rawData = e.postData ? e.postData.contents : null;
+    var rawData = e && e.postData ? e.postData.contents : null;
     if (!rawData) {
-      return ContentService.createTextOutput(JSON.stringify({
+      return createJsonResponse({
         status: "error",
         message: "Tidak ada data payload yang diterima."
-      })).setMimeType(ContentService.MimeType.JSON);
+      });
     }
 
-    var payload = JSON.parse(rawData);
-    var action = payload.action || "ping";
+    var payload = {};
+    try {
+      payload = JSON.parse(rawData);
+    } catch (parseErr) {
+      return createJsonResponse({
+        status: "error",
+        message: "Format JSON payload tidak valid: " + parseErr.toString()
+      });
+    }
+
+    var action = payload.action || "TEST_PING";
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // Ensure all sheets & headers exist
+    // Ensure all sheets & headers exist with proper styles
     setupSheetsAndHeaders(ss);
 
     var resultMessage = "";
 
     if (action === "TEST_PING") {
-      resultMessage = "Koneksi Google Apps Script berhasil aktif!";
+      resultMessage = "Koneksi Google Apps Script DelPos berhasil terhubung aktif!";
     } 
     else if (action === "TRANSACTION") {
       appendTransactionRow(ss, payload.data, payload.store);
-      resultMessage = "Transaksi berhasil dicatat ke Google Sheets.";
+      resultMessage = "Transaksi berhasil dicatat & stok produk terupdate otomatis di Google Sheets.";
     } 
     else if (action === "PRODUCT" || action === "PRODUCT_UPDATE") {
       upsertProductRow(ss, payload.data);
@@ -74,41 +88,57 @@ function doPost(e) {
     } 
     else if (action === "FULL_SYNC") {
       performFullSync(ss, payload.data);
-      resultMessage = "Seluruh data POS berhasil disinkronisasi ke Google Sheets.";
+      resultMessage = "Seluruh data DelPos berhasil disinkronkan ke Google Sheets.";
     } 
     else {
-      resultMessage = "Aksi tidak dikenali: " + action;
+      resultMessage = "Aksi diterima: " + action;
     }
 
     // Refresh Summary Dashboard formulas
     updateDashboardSummary(ss);
 
-    return ContentService.createTextOutput(JSON.stringify({
+    return createJsonResponse({
       status: "success",
+      app: "DelPos",
       action: action,
       message: resultMessage,
       timestamp: new Date().toISOString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    });
 
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
+    return createJsonResponse({
       status: "error",
-      message: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+      message: "Terjadi kesalahan internal GAS: " + err.toString()
+    });
   } finally {
-    lock.releaseLock();
+    try {
+      lock.releaseLock();
+    } catch (e) {}
   }
 }
 
 function doGet(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  setupSheetsAndHeaders(ss);
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "active",
-    system: "DelPOS Google Apps Script Sync Gateway",
-    spreadsheetName: ss.getName(),
-    timestamp: new Date().toISOString()
-  })).setMimeType(ContentService.MimeType.JSON);
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    setupSheetsAndHeaders(ss);
+    return createJsonResponse({
+      status: "active",
+      system: "DelPos Google Apps Script Sync Gateway",
+      app: "DelPos",
+      spreadsheetName: ss.getName(),
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    return createJsonResponse({
+      status: "error",
+      message: err.toString()
+    });
+  }
+}
+
+function createJsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // -------------------------------------------------------------
@@ -119,8 +149,9 @@ function setupSheetsAndHeaders(ss) {
   var sheetTrx = getOrCreateSheet(ss, "Transaksi_Penjualan", "#0055EE");
   if (sheetTrx.getLastRow() === 0) {
     var headers = [
-      "Waktu Transaksi", "ID Transaksi", "Nama Toko", "Kasir", "Pelanggan",
-      "Metode Pembayaran", "Item & Kuantitas", "Subtotal", "Pajak", "Diskon", "Total Bayar", "Status"
+      "Waktu Transaksi", "No Faktur / Order", "ID Transaksi", "Nama Toko", "Kasir", "Pelanggan",
+      "Metode Pembayaran", "Rincian Item & Qty", "Subtotal (Rp)", "Pajak PPN (Rp)", "Diskon (Rp)",
+      "Total Bayar (Rp)", "Uang Diterima (Rp)", "Kembalian (Rp)", "Status"
     ];
     sheetTrx.appendRow(headers);
     formatHeaderRow(sheetTrx, "#0055EE");
@@ -130,7 +161,7 @@ function setupSheetsAndHeaders(ss) {
   var sheetProd = getOrCreateSheet(ss, "Master_Produk", "#10B981");
   if (sheetProd.getLastRow() === 0) {
     var headers = [
-      "ID Produk", "Barcode", "Nama Produk", "Kategori", "Harga Beli (HPP)", "Harga Jual", "Stok Tersedia", "Satuan", "Margin (Rp)", "Margin (%)", "Update Terakhir"
+      "ID Produk", "Barcode", "Nama Produk", "Kategori", "Harga Modal (HPP)", "Harga Jual", "Stok Tersedia", "Satuan", "Margin (Rp)", "Margin (%)", "Update Terakhir"
     ];
     sheetProd.appendRow(headers);
     formatHeaderRow(sheetProd, "#10B981");
@@ -150,7 +181,7 @@ function setupSheetsAndHeaders(ss) {
   var sheetOrder = getOrCreateSheet(ss, "Antrian_Pesanan", "#8B5CF6");
   if (sheetOrder.getLastRow() === 0) {
     var headers = [
-      "Waktu Order", "No Antrian", "Nama Pemesan", "Tipe Layanan", "No Meja / Kontak", "Rincian Menu", "Total", "Status Pesanan", "Status Bayar"
+      "Waktu Order", "No Antrian", "Nama Pemesan", "Tipe Layanan", "No Meja / Kontak", "Rincian Menu", "Total (Rp)", "Status Pesanan", "Status Bayar"
     ];
     sheetOrder.appendRow(headers);
     formatHeaderRow(sheetOrder, "#8B5CF6");
@@ -162,25 +193,25 @@ function setupSheetsAndHeaders(ss) {
     sheetDash.getRange("A1:C1").merge().setValue("RINGKASAN KINERJA BISNIS DELPOS").setFontWeight("bold").setFontSize(14).setBackground("#003B99").setFontColor("#FFFFFF").setHorizontalAlignment("center");
     
     sheetDash.getRange("A3").setValue("Total Omzet Penjualan").setFontWeight("bold");
-    sheetDash.getRange("B3").setFormula("=IFERROR(SUM(Transaksi_Penjualan!K2:K), 0)").setNumberFormat("#,##0");
+    sheetDash.getRange("B3").setFormula("=IFERROR(SUM(Transaksi_Penjualan!L2:L), 0)").setNumberFormat("#,##0");
 
-    sheetDash.getRange("A4").setValue("Total Pengeluaran Beban").setFontWeight("bold");
+    sheetDash.getRange("A4").setValue("Total Pengeluaran Biaya").setFontWeight("bold");
     sheetDash.getRange("B4").setFormula("=IFERROR(SUM(Biaya_Operasional!E2:E), 0)").setNumberFormat("#,##0");
 
     sheetDash.getRange("A5").setValue("Estimasi Laba Operasional").setFontWeight("bold");
     sheetDash.getRange("B5").setFormula("=B3-B4").setNumberFormat("#,##0").setFontWeight("bold");
 
-    sheetDash.getRange("A6").setValue("Total Transaksi Kasir").setFontWeight("bold");
+    sheetDash.getRange("A6").setValue("Total Transaksi Selesai").setFontWeight("bold");
     sheetDash.getRange("B6").setFormula("=IFERROR(COUNTA(Transaksi_Penjualan!B2:B), 0)");
 
     sheetDash.getRange("A7").setValue("Total Master Produk Aktif").setFontWeight("bold");
     sheetDash.getRange("B7").setFormula("=IFERROR(COUNTA(Master_Produk!A2:A), 0)");
 
-    sheetDash.getRange("A8").setValue("Waktu Update Terakhir").setFontWeight("bold");
+    sheetDash.getRange("A8").setValue("Waktu Sinkronisasi Terakhir").setFontWeight("bold");
     sheetDash.getRange("B8").setValue(new Date().toLocaleString("id-ID"));
 
-    sheetDash.setColumnWidth(1, 240);
-    sheetDash.setColumnWidth(2, 200);
+    sheetDash.setColumnWidth(1, 250);
+    sheetDash.setColumnWidth(2, 220);
   }
 }
 
@@ -209,59 +240,122 @@ function formatHeaderRow(sheet, bgColor) {
 }
 
 // -------------------------------------------------------------
-// ROW HANDLERS
+// ROW HANDLERS (BULLETPROOF & ERROR-FREE)
 // -------------------------------------------------------------
 function appendTransactionRow(ss, trx, store) {
   if (!trx) return;
   var sheet = getOrCreateSheet(ss, "Transaksi_Penjualan");
   
-  var itemsStr = (trx.items || []).map(function(item) {
-    return item.product.name + " (" + item.quantity + "x @ " + formatRupiah(item.product.price) + ")";
+  // Format items string safely
+  var itemsList = trx.items || [];
+  var itemsStr = itemsList.map(function(item) {
+    var name = item.productName || (item.product ? item.product.name : "Produk");
+    var qty = item.quantity || 1;
+    var price = item.price !== undefined ? item.price : (item.product ? (item.product.sellingPrice || item.product.price) : 0);
+    return name + " (" + qty + "x @ " + formatRupiah(price) + ")";
   }).join("; ");
 
+  var customerName = "Pelanggan Umum";
+  if (trx.customer) {
+    customerName = typeof trx.customer === "object" ? (trx.customer.name || "Pelanggan Umum") : String(trx.customer);
+  } else if (trx.customerName) {
+    customerName = trx.customerName;
+  }
+
+  var formattedTime = "";
+  if (trx.date && trx.time) {
+    formattedTime = trx.date + " " + trx.time;
+  } else if (trx.timestamp) {
+    formattedTime = new Date(trx.timestamp).toLocaleString("id-ID");
+  } else {
+    formattedTime = new Date().toLocaleString("id-ID");
+  }
+
   var row = [
-    trx.timestamp ? new Date(trx.timestamp).toLocaleString("id-ID") : new Date().toLocaleString("id-ID"),
+    formattedTime,
+    trx.orderNumber || trx.id || "",
     trx.id || "",
-    (store && store.name) ? store.name : "DelPOS Store",
+    (store && store.name) ? store.name : "DelPos Store",
     trx.cashierName || "Kasir",
-    trx.customerName || "Pelanggan Umum",
+    customerName,
     trx.paymentMethod || "Tunai",
     itemsStr,
-    trx.subtotal || 0,
-    trx.tax || 0,
-    trx.discount || 0,
-    trx.total || 0,
+    Number(trx.subtotal || 0),
+    Number(trx.tax || 0),
+    Number(trx.discount || 0),
+    Number(trx.total || 0),
+    Number(trx.cashGiven || (trx.paymentMethod === "Tunai" ? trx.total : 0)),
+    Number(trx.change || 0),
     trx.status || "Selesai"
   ];
 
   sheet.appendRow(row);
+
+  // Auto-deduct stock in Master_Produk if items are present
+  try {
+    deductProductStockFromTrx(ss, itemsList);
+  } catch (stockErr) {
+    // Prevent stock deduction failure from aborting transaction save
+  }
+}
+
+function deductProductStockFromTrx(ss, items) {
+  if (!items || items.length === 0) return;
+  var sheet = ss.getSheetByName("Master_Produk");
+  if (!sheet || sheet.getLastRow() <= 1) return;
+
+  var data = sheet.getDataRange().getValues();
+  // Col 0: ID Produk, Col 2: Nama Produk, Col 6: Stok Tersedia
+  for (var k = 0; k < items.length; k++) {
+    var it = items[k];
+    var targetId = String(it.productId || (it.product ? it.product.id : ""));
+    var targetName = String(it.productName || (it.product ? it.product.name : ""));
+    var qty = Number(it.quantity || 1);
+
+    for (var r = 1; r < data.length; r++) {
+      var rowProdId = String(data[r][0]);
+      var rowProdName = String(data[r][2]);
+      if ((targetId && rowProdId === targetId) || (targetName && rowProdName.toLowerCase() === targetName.toLowerCase())) {
+        var currentStock = Number(data[r][6] || 0);
+        var newStock = Math.max(0, currentStock - qty);
+        sheet.getRange(r + 1, 7).setValue(newStock); // Column 7 is Stok Tersedia
+        sheet.getRange(r + 1, 11).setValue(new Date().toLocaleString("id-ID")); // Column 11 is Update Terakhir
+        data[r][6] = newStock;
+        break;
+      }
+    }
+  }
 }
 
 function upsertProductRow(ss, prod) {
   if (!prod) return;
   var sheet = getOrCreateSheet(ss, "Master_Produk");
   var data = sheet.getDataRange().getValues();
-  var prodId = String(prod.id);
+  var prodId = String(prod.id || "");
   var rowIndex = -1;
 
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === prodId) {
-      rowIndex = i + 1;
-      break;
+  if (prodId && data.length > 1) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === prodId) {
+        rowIndex = i + 1;
+        break;
+      }
     }
   }
 
-  var marginRp = (prod.price || 0) - (prod.costPrice || 0);
-  var marginPct = prod.price > 0 ? ((marginRp / prod.price) * 100).toFixed(1) + "%" : "0%";
+  var cost = Number(prod.costPrice || prod.capitalPrice || 0);
+  var price = Number(prod.sellingPrice || prod.price || 0);
+  var marginRp = price - cost;
+  var marginPct = price > 0 ? ((marginRp / price) * 100).toFixed(1) + "%" : "0%";
 
   var row = [
     prod.id || "",
     prod.barcode || "-",
     prod.name || "",
     prod.category || "Umum",
-    prod.costPrice || 0,
-    prod.price || 0,
-    prod.stock || 0,
+    cost,
+    price,
+    Number(prod.stock || 0),
     prod.unit || "Pcs",
     marginRp,
     marginPct,
@@ -283,7 +377,7 @@ function appendExpenseRow(ss, exp) {
     exp.id || "",
     exp.category || "Operasional",
     exp.description || "-",
-    exp.amount || 0,
+    Number(exp.amount || 0),
     exp.paymentMethod || "Kas Toko",
     exp.recordedBy || "Owner"
   ];
@@ -295,7 +389,10 @@ function appendOrderRow(ss, order) {
   var sheet = getOrCreateSheet(ss, "Antrian_Pesanan");
   
   var itemsStr = (order.items || []).map(function(item) {
-    return item.productName + " (" + item.quantity + "x @ " + formatRupiah(item.price) + ")";
+    var name = item.productName || item.name || "Menu";
+    var qty = item.quantity || 1;
+    var price = item.price || 0;
+    return name + " (" + qty + "x @ " + formatRupiah(price) + ")";
   }).join("; ");
 
   var row = [
@@ -303,9 +400,9 @@ function appendOrderRow(ss, order) {
     order.queueNumber || "-",
     order.customerName || "Pelanggan",
     order.orderType || "DINE_IN",
-    order.tableNumber || order.customerPhone || "-",
+    order.tableOrRoom || order.tableNumber || order.customerPhone || "-",
     itemsStr,
-    order.totalAmount || 0,
+    Number(order.total || order.totalAmount || 0),
     order.status || "MENUNGGU",
     order.isPaid ? "LUNAS" : "BELUM LUNAS"
   ];
@@ -318,7 +415,6 @@ function performFullSync(ss, allData) {
   // Sync Products
   if (allData.products && allData.products.length > 0) {
     var sheetProd = getOrCreateSheet(ss, "Master_Produk", "#10B981");
-    // Clear existing data rows except headers
     if (sheetProd.getLastRow() > 1) {
       sheetProd.deleteRows(2, sheetProd.getLastRow() - 1);
     }
@@ -380,10 +476,10 @@ export async function sendPayloadToGoogleAppsScript(
 
   const payload = {
     action,
-    app: 'DelPOS (powered by AkuPos)',
-    version: '1.2.0',
+    app: APP_CONFIG.name,
+    version: APP_CONFIG.version,
     timestamp: new Date().toISOString(),
-    store: store || { name: 'DelPOS Store' },
+    store: store || { name: `${APP_CONFIG.name} Store` },
     data,
   };
 

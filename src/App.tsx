@@ -31,7 +31,11 @@ import { AddProductModal } from './components/modals/AddProductModal';
 import { AddExpenseModal } from './components/modals/AddExpenseModal';
 import { EmailInboxSimulationModal } from './components/modals/EmailInboxSimulationModal';
 import { CustomerCatalogQRModal } from './components/modals/CustomerCatalogQRModal';
+import { PwaInstallModal } from './components/modals/PwaInstallModal';
+import { AppLockModal } from './components/modals/AppLockModal';
+import { NotificationPopupManager } from './components/NotificationPopupManager';
 import { LicenseExpirationAlert } from './components/LicenseExpirationAlert';
+import { Footer } from './components/Footer';
 import { Product } from './types';
 
 const MainAppContent: React.FC = () => {
@@ -44,6 +48,8 @@ const MainAppContent: React.FC = () => {
     setIsSuperAdminOpen,
     isCatalogQRModalOpen,
     setIsCatalogQRModalOpen,
+    isPwaInstallModalOpen,
+    setIsPwaInstallModalOpen,
     currentLicense,
   } = useApp();
 
@@ -203,20 +209,25 @@ const MainAppContent: React.FC = () => {
       <div className="flex flex-1 overflow-hidden relative">
         <Sidebar />
 
-        <main className="flex-1 overflow-y-auto no-scrollbar p-3.5 sm:p-4 md:p-6 lg:p-8 pb-28 lg:pb-8 max-w-7xl mx-auto w-full">
-          <LicenseExpirationAlert />
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentTab}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="w-full"
-            >
-              {renderActiveView()}
-            </motion.div>
-          </AnimatePresence>
+        <main className="flex-1 overflow-y-auto no-scrollbar p-3.5 sm:p-4 md:p-6 lg:p-8 pb-28 lg:pb-8 max-w-7xl mx-auto w-full flex flex-col justify-between">
+          <div>
+            <LicenseExpirationAlert />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentTab}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                className="w-full"
+              >
+                {renderActiveView()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Clean Plain Footer */}
+          <Footer />
         </main>
 
         <BottomNav />
@@ -242,6 +253,16 @@ const MainAppContent: React.FC = () => {
         isOpen={isAddExpenseOpen}
         onClose={() => setIsAddExpenseOpen(false)}
       />
+      <PwaInstallModal
+        isOpen={isPwaInstallModalOpen}
+        onClose={() => setIsPwaInstallModalOpen(false)}
+      />
+
+      {/* Auto-Lock Inactivity Security Pop-up Modal (10 Menit) */}
+      <AppLockModal />
+
+      {/* Interactive Global Pop-up Notification Engine */}
+      <NotificationPopupManager />
 
       {/* Global Notifications Toast */}
       <ToastContainer />

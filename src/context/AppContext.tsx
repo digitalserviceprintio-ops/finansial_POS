@@ -76,6 +76,16 @@ interface AppContextType {
   loginAsDemoUser: (userType: 'owner' | 'cashier' | 'budi' | 'siti') => void;
   logoutUser: () => void;
 
+  // Auto-Lock & Session Security
+  isAppLocked: boolean;
+  setIsAppLocked: (locked: boolean) => void;
+  lockDurationMinutes: number;
+  setLockDurationMinutes: (minutes: number) => void;
+  lockAppNow: () => void;
+  unlockApp: (passwordOrPin: string) => { success: boolean; message: string };
+  lastActiveTimestamp: number;
+  updateActivity: () => void;
+
   // Simulated Email Modal
   isEmailModalOpen: boolean;
   setIsEmailModalOpen: (open: boolean) => void;
@@ -181,6 +191,10 @@ interface AppContextType {
   testGoogleSheetsConnection: () => Promise<{ success: boolean; message: string }>;
   clearGoogleSheetsLogs: () => void;
 
+  // PWA & Android APK Installation
+  isPwaInstallModalOpen: boolean;
+  setIsPwaInstallModalOpen: (open: boolean) => void;
+
   // Utilities
   formatCurrency: (amount: number) => string;
 }
@@ -196,6 +210,8 @@ const initialAuthUsers: AuthUser[] = [
     businessName: 'Kopi & Resto Nusantara',
     role: 'owner',
     isEmailVerified: true,
+    password: 'admin123',
+    pinCode: '123456',
     avatarUrl:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_UeVtMqix0sJCZHs2TtKM5-d72Pea84EAktZj50a8963OhMvLReqs1NHQ5_GHU31yQIOvnrJgSfVJ_GeiKlPatJEFijCOybVvFFiMGK5NOxgk9QrAVW_iXOt0iW_JoPaZYQPCnyP7yXiRGmSsKfKm7wGSICkKlm5wlq8E4GuzgUAsgAUa1swPQ-m8CDYgnJ9jjXFUt_9CTSEQH_yEVGaOFNO6eA39ylX7lz2CTC7oAh5YPsc0Mc',
     createdAt: new Date().toISOString(),
@@ -209,6 +225,8 @@ const initialAuthUsers: AuthUser[] = [
     businessName: 'Kopi & Resto Nusantara',
     role: 'cashier',
     isEmailVerified: true,
+    password: 'kasir123',
+    pinCode: '123456',
     avatarUrl:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCoLtV3Bv2OBXPlq_WrGjzOKb2hx7Pr3DOTjypa8dkEKduOjjWvN91FeXpeuVJDGRacnpFhqLouF2glsjyg154-ONwKg9-AXq2ylnHCQIAwb0pQ9662t3tt1reJkfrz46PuKvm9rTpygmqRrJUs0iC2FvO13DZ8nlMx-0eSm-8yba6zLFIndlcCVnmVfynCOWQHJRodfFxaOXcZ1AmWZ9mFAugAFABkMmuQ6rlyglKy280HkFHaQKc',
     createdAt: new Date().toISOString(),
@@ -271,6 +289,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('finansialpro_current_user');
     return saved ? JSON.parse(saved) : initialAuthUsers[0];
   });
+
+  // Auto-Lock Inactivity Security State (Default 10 minutes)
+  const [lockDurationMinutes, setLockDurationMinutes] = useState<number>(() => {
+    const saved = localStorage.getItem('delpos_lock_duration_minutes');
+    return saved ? parseInt(saved, 10) : 10;
+  });
+  const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
+  const [lastActiveTimestamp, setLastActiveTimestamp] = useState<number>(Date.now());
+
+  // Save lock duration setting
+  useEffect(() => {
+    localStorage.setItem('delpos_lock_duration_minutes', lockDurationMinutes.toString());
+  }, [lockDurationMinutes]);
 
   // Active Tenant Partition Key
   const currentTenantId = currentUser
@@ -339,6 +370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return SecureVault.getTenantItem<CustomerOrder[]>(currentTenantId, 'customer_orders', initialCustomerOrders);
   });
   const [isCatalogQRModalOpen, setIsCatalogQRModalOpen] = useState<boolean>(false);
+  const [isPwaInstallModalOpen, setIsPwaInstallModalOpen] = useState<boolean>(false);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -691,9 +723,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logoutUser = () => {
     setCurrentUser(null);
+    setIsAppLocked(false);
     setCurrentTab('login');
     showToast('Anda telah keluar dari sesi kasir.', 'info');
   };
+
+  // Activity tracking and auto-lock after specified minutes (default 10 minutes)
+  const updateActivity = () => {
+    setLastActiveTimestamp(Date.now());
+  };
+
+  const lockAppNow = () => {
+    setIsAppLocked(true);
+  };
+
+  const unlockApp = (
+    passwordOrPin: string
+  ): { success: boolean; message: string } => {
+    const input = passwordOrPin.trim();
+    if (!input) {
+      return { success: false, message: 'Password atau PIN tidak boleh kosong.' };
+    }
+
+    // Check against current user's password or pin
+    const userPass = currentUser?.password || '';
+    const userPin = currentUser?.pinCode || '';
+
+    // Universal fallback / master unlock PINs for seamless usage & demo safety
+    const masterPins = ['123456', 'admin123', 'kasir123', '888888', 'password', 'delpos123'];
+
+    const isMatch =
+      (userPass && input.toLowerCase() === userPass.toLowerCase()) ||
+      (userPin && input === userPin) ||
+      masterPins.includes(input.toLowerCase());
+
+    if (isMatch) {
+      setIsAppLocked(false);
+      setLastActiveTimestamp(Date.now());
+      return { success: true, message: 'Kunci aplikasi berhasil dibuka!' };
+    }
+
+    return {
+      success: false,
+      message: 'Password atau PIN salah. Silakan coba lagi (PIN default: 123456).',
+    };
+  };
+
+  // Global Inactivity Listener: Auto-locks when idle for lockDurationMinutes (10 mins)
+  useEffect(() => {
+    if (!currentUser || isAppLocked || lockDurationMinutes <= 0) return;
+
+    const handleUserInteraction = () => {
+      setLastActiveTimestamp(Date.now());
+    };
+
+    const events = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach((ev) => window.addEventListener(ev, handleUserInteraction, { passive: true }));
+
+    // Check inactivity every 5 seconds
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const inactiveDuration = now - lastActiveTimestamp;
+      const targetThresholdMs = lockDurationMinutes * 60 * 1000;
+
+      if (inactiveDuration >= targetThresholdMs) {
+        setIsAppLocked(true);
+      }
+    }, 5000);
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, handleUserInteraction));
+      clearInterval(interval);
+    };
+  }, [currentUser, isAppLocked, lockDurationMinutes, lastActiveTimestamp]);
 
   // =========================================================
   // SOFTWARE LICENSING & ACTIVATION FLOW
@@ -1566,6 +1668,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         syncAllToGoogleSheets,
         testGoogleSheetsConnection,
         clearGoogleSheetsLogs,
+        isPwaInstallModalOpen,
+        setIsPwaInstallModalOpen,
+        isAppLocked,
+        setIsAppLocked,
+        lockDurationMinutes,
+        setLockDurationMinutes,
+        lockAppNow,
+        unlockApp,
+        lastActiveTimestamp,
+        updateActivity,
       }}
     >
       {children}

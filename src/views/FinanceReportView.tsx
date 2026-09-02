@@ -20,7 +20,9 @@ import {
 import { useApp } from '../context/AppContext';
 import { ReportSubTab } from '../types';
 import { ExportAccountingModal } from '../components/modals/ExportAccountingModal';
+import { ExportPdfModal } from '../components/modals/ExportPdfModal';
 import { AccountingReportType } from '../utils/accountingExport';
+import { FileText, Printer, Filter } from 'lucide-react';
 
 interface FinanceReportViewProps {
   onOpenAddExpenseModal: () => void;
@@ -40,6 +42,7 @@ export const FinanceReportView: React.FC<FinanceReportViewProps> = ({ onOpenAddE
 
   const [datePeriod, setDatePeriod] = useState<'Bulan Ini' | 'Bulan Lalu' | 'Tahun Ini'>('Bulan Ini');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
 
   // Calculations for Arus Kas & P&L
   const completedTrx = transactions.filter((t) => t.status === 'Selesai');
@@ -92,6 +95,13 @@ export const FinanceReportView: React.FC<FinanceReportViewProps> = ({ onOpenAddE
     return 'product_sales';
   };
 
+  const getPdfTypeForSubTab = (): 'all_summary' | 'cashflow' | 'profit_loss' | 'product_sales' => {
+    if (reportSubTab === 'cashflow') return 'cashflow';
+    if (reportSubTab === 'profit_loss') return 'profit_loss';
+    if (reportSubTab === 'product_sales') return 'product_sales';
+    return 'all_summary';
+  };
+
   return (
     <div id="finance-report-view" className="space-y-6 pb-20 lg:pb-0">
       {/* Header & Sub-Tab Navigation */}
@@ -106,22 +116,33 @@ export const FinanceReportView: React.FC<FinanceReportViewProps> = ({ onOpenAddE
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Export button */}
+          {/* PDF Report Print & Download Button */}
+          <button
+            id="print-pdf-report-btn"
+            onClick={() => setIsPdfModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#4648d4] to-[#2b2dbe] px-3.5 py-2 text-xs font-bold text-white hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xs cursor-pointer"
+            title="Cetak & Unduh Laporan PDF Resmi (Lengkap dengan Filter Tanggal & Format Rapi)"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span>Cetak Laporan PDF</span>
+          </button>
+
+          {/* Export CSV / Excel button */}
           <button
             id="export-report-btn"
             onClick={() => setIsExportModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-3.5 py-2 text-xs font-bold text-[#4648d4] hover:bg-[#ebeaff] hover:border-[#4648d4] transition-all shadow-xs"
+            className="flex items-center gap-1.5 rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] px-3.5 py-2 text-xs font-bold text-[#4648d4] hover:bg-[#ebeaff] hover:border-[#4648d4] transition-all shadow-xs cursor-pointer"
             title="Ekspor Laporan Keuangan & Akuntansi (CSV / Excel Rapi)"
           >
             <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span>Ekspor CSV / Excel Akuntansi</span>
+            <span>Ekspor CSV / Excel</span>
           </button>
 
           {/* Record Expense Button */}
           <button
             id="open-expense-modal-btn"
             onClick={onOpenAddExpenseModal}
-            className="flex items-center gap-1.5 rounded-xl bg-[#ba1a1a] px-3.5 py-2 text-xs font-bold text-white hover:bg-red-700 transition-all shadow-xs"
+            className="flex items-center gap-1.5 rounded-xl bg-[#ba1a1a] px-3.5 py-2 text-xs font-bold text-white hover:bg-red-700 transition-all shadow-xs cursor-pointer"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Catat Pengeluaran</span>
@@ -506,6 +527,13 @@ export const FinanceReportView: React.FC<FinanceReportViewProps> = ({ onOpenAddE
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         defaultReportType={getAccountingTypeForSubTab()}
+      />
+
+      {/* PDF Official Printable Report Modal with Filters */}
+      <ExportPdfModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        initialReportType={getPdfTypeForSubTab()}
       />
     </div>
   );

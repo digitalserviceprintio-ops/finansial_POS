@@ -1,6 +1,6 @@
 {
-  "name": "DelPOS - Smart POS & Financial Management",
-  "description": "Aplikasi Kasir POS & Pembukuan Finansial UMKM powered by AkuPos system",
+  "name": "DelPos",
+  "description": "Sistem Kasir Pintar & Manajemen Finansial UMKM",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

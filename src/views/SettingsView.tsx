@@ -30,6 +30,9 @@ import {
   ExternalLink,
   QrCode,
   Smartphone,
+  Bell,
+  Volume2,
+  WifiOff,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -38,6 +41,7 @@ import {
 } from '../utils/bluetoothPrinter';
 import { BluetoothPrinterModal } from '../components/modals/BluetoothPrinterModal';
 import { generateQRISString, generateQRCodeDataURL } from '../utils/qrisGenerator';
+import { soundManager, requestNativeNotificationPermission, sendBrowserNotification } from '../utils/soundAlert';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -50,6 +54,10 @@ export const SettingsView: React.FC = () => {
     showToast,
     currentLicense,
     activateLicenseKey,
+    setIsPwaInstallModalOpen,
+    lockDurationMinutes,
+    setLockDurationMinutes,
+    lockAppNow,
   } = useApp();
 
   const [formData, setFormData] = useState({
@@ -808,6 +816,211 @@ export const SettingsView: React.FC = () => {
                 {formData.qrisDanaNumber}
               </p>
               <p className="text-[9px] text-slate-400">Siap di-scan di Kasir POS</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Mode Aplikasi Android APK / PWA & Standalone */}
+        <div className="bg-gradient-to-br from-indigo-50/90 via-white to-blue-50/70 p-6 rounded-3xl border border-indigo-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-100">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white shadow-md">
+                <Smartphone className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-extrabold text-[#1b1b23]">
+                    Aplikasi Android (APK / PWA) & Akses Mandiri
+                  </h3>
+                  <span className="text-[10px] font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-full">
+                    Standalone
+                  </span>
+                </div>
+                <p className="text-xs text-[#767680] mt-0.5">
+                  Jalankan aplikasi seperti APK bawaan Android tanpa bilah browser, mendukung caching offline dan respon instan.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsPwaInstallModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
+            >
+              <Download className="h-4 w-4" />
+              <span>Buka Panduan & Pasang APK</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="p-3.5 rounded-2xl bg-white border border-indigo-100 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>WebAPK Auto-Package</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Ikon aplikasi otomatis tersemat di beranda layar HP layaknya APK resmi dari Play Store.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white border border-indigo-100 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                <WifiOff className="h-4 w-4 text-blue-600" />
+                <span>Offline Support</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Service Worker mencadangkan aset statis sehingga kasir tetap dapat diakses tanpa koneksi internet lambat.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white border border-indigo-100 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                <ShieldCheck className="h-4 w-4 text-indigo-600" />
+                <span>Terisolasi & Aman</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Data transaksi terlindungi dengan enkripsi lokal sandboxing di perangkat masing-masing kasir.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Notifikasi Pop-up Interaktif & Audio Chime */}
+        <div className="bg-white p-6 rounded-3xl border border-[#e2e1ec] shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#f3f2fa]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md">
+                <Bell className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-[#1b1b23]">
+                  Notifikasi Pop-up Interaktif & Audio Chime
+                </h3>
+                <p className="text-xs text-[#767680] mt-0.5">
+                  Uji coba nada dering lonceng Web Audio dan pop-up otomatis saat transaksi selesai atau pesanan baru masuk.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSuccessChime();
+                  showToast('🎵 Suara Chime Transaksi Kasir berhasil diputar!', 'success');
+                }}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                <Volume2 className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Uji Suara Chime</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const granted = await requestNativeNotificationPermission();
+                  if (granted) {
+                    sendBrowserNotification('Notifikasi DelPOS Aktif', {
+                      body: 'Notifikasi pop-up sistem dan kasir telah siap digunakan.',
+                    });
+                    soundManager.playSuccessChime();
+                    showToast('Izin notifikasi browser berhasil diaktifkan!', 'success');
+                  } else {
+                    showToast('Izin notifikasi ditolak oleh browser.', 'warning');
+                  }
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-all cursor-pointer"
+              >
+                <Bell className="h-3.5 w-3.5 text-amber-600" />
+                <span>Aktifkan Notifikasi Browser</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200/80 text-xs text-slate-600 space-y-2">
+            <p className="font-bold text-slate-800">Peristiwa yang Memicu Pop-up & Audio:</p>
+            <ul className="list-disc pl-5 space-y-1 text-[11px]">
+              <li><strong>Transaksi Berhasil:</strong> Memunculkan pop-up dialog ringkasan dengan opsi Cetak Struk instan.</li>
+              <li><strong>Pesanan Baru dari QR Katalog:</strong> Memunculkan lonceng alarm dan pop-up antrian pesanan baru.</li>
+              <li><strong>Peringatan Stok Habis / Minim:</strong> Notifikasi badge pada menu produk dan header sistem.</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Keamanan & Penguncian Otomatis Kasir (Auto-Lock 10 Menit) */}
+        <div className="bg-white p-6 rounded-3xl border border-amber-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-100">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md">
+                <Lock className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-extrabold text-[#1b1b23]">
+                    Keamanan Kasir & Kunci Otomatis (Auto-Lock)
+                  </h3>
+                  <span className="text-[10px] font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full">
+                    {lockDurationMinutes > 0 ? `${lockDurationMinutes} Menit Aktif` : 'Nonaktif'}
+                  </span>
+                </div>
+                <p className="text-xs text-[#767680] mt-0.5">
+                  Aplikasi otomatis mengunci layar pop-up jika tidak ada aktivitas selama 10 menit untuk melindungi data kasir.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                lockAppNow();
+                showToast('🔒 Layar kasir berhasil dikunci untuk pengujian!', 'info');
+              }}
+              className="flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
+            >
+              <Lock className="h-4 w-4" />
+              <span>Uji Kunci Layar Sekarang</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-extrabold text-[#1b1b23] mb-2">
+                Durasi Waktu Tidak Digunakan Sebelum Mengunci
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { label: '5 Menit', value: 5 },
+                  { label: '10 Menit (Bawaan)', value: 10 },
+                  { label: '15 Menit', value: 15 },
+                  { label: '30 Menit', value: 30 },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => {
+                      setLockDurationMinutes(item.value);
+                      showToast(`Durasi kunci otomatis diatur ke ${item.value} menit.`, 'success');
+                    }}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all text-center ${
+                      lockDurationMinutes === item.value
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200 text-xs text-amber-950 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <ShieldCheck className="h-4 w-4 text-amber-700" />
+                <span>Otentikasi Pembukaan Kunci</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-amber-900">
+                Saat layar terkunci, kasir atau admin harus memasukkan <strong>Password Akun</strong> atau <strong>PIN Kasir (Bawaan: 123456)</strong> untuk melanjutkan transaksi POS.
+              </p>
             </div>
           </div>
         </div>

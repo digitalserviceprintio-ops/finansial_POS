@@ -26,6 +26,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { DEFAULT_GOOGLE_APPS_SCRIPT_CODE } from '../utils/googleAppsScript';
 import { DelPOSLogo } from '../components/brand/DelPOSLogo';
+import { APP_CONFIG } from '../utils/appConfig';
 
 export const GoogleAppsScriptView: React.FC = () => {
   const {
@@ -249,7 +250,7 @@ export const GoogleAppsScriptView: React.FC = () => {
                 <span>Pemicu Otomatis (Live Auto-Sync Events)</span>
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Pilih aksi mana saja di DelPOS yang langsung dikirimkan ke tabel Google Spreadsheet tanpa perlu ekspor manual.
+                Pilih aksi mana saja di {APP_CONFIG.brand} yang langsung dikirimkan ke tabel Google Spreadsheet tanpa perlu ekspor manual.
               </p>
 
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -423,7 +424,7 @@ export const GoogleAppsScriptView: React.FC = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-6">
           <div className="border-b border-slate-100 pb-4">
             <h2 className="text-lg font-black text-slate-900">
-              Panduan Menghubungkan DelPOS ke Google Spreadsheet (1 Menit)
+              Panduan Menghubungkan {APP_CONFIG.brand} ke Google Spreadsheet (1 Menit)
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               Ikuti 4 langkah mudah di bawah ini untuk membuat Webhook Google Apps Script gratis dan otomatis.
@@ -477,7 +478,7 @@ export const GoogleAppsScriptView: React.FC = () => {
                 4
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-bold text-slate-900">Salin Web App URL ke DelPOS</h3>
+                <h3 className="text-sm font-bold text-slate-900">Salin Web App URL ke {APP_CONFIG.brand}</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Salin URL Aplikasi Web yang berakhiran <code>/exec</code>, tempelkan ke kolom URL di tab Konfigurasi, lalu klik <b>Tes Koneksi</b>.
                 </p>

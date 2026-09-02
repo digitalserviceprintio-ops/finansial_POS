@@ -28,6 +28,8 @@ export interface AuthUser {
   role: 'owner' | 'admin' | 'cashier';
   isEmailVerified: boolean;
   avatarUrl?: string;
+  password?: string;
+  pinCode?: string;
   createdAt: string;
   lastLoginAt: string;
 }

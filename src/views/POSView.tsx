@@ -309,7 +309,7 @@ export const POSView: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3.5">
               {filteredProducts.map((product) => {
                 const inCart = cart.find((item) => item.product.id === product.id);
                 const isOutOfStock = product.stock <= 0 || !product.isAvailable;
@@ -390,7 +390,7 @@ export const POSView: React.FC = () => {
       </div>
 
       {/* Right side: Active Cart & Checkout Panel */}
-      <div className="w-full lg:w-96 flex flex-col rounded-3xl border border-[#e2e1ec] bg-white shadow-xs">
+      <div id="pos-cart-panel" className="w-full lg:w-96 flex flex-col rounded-3xl border border-[#e2e1ec] bg-white shadow-xs scroll-mt-20">
         {/* Cart Header */}
         <div className="p-4 border-b border-[#f3f2fa] space-y-3">
           <div className="flex items-center justify-between">
@@ -578,6 +578,40 @@ export const POSView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Floating Bottom Quick Cart Bar for Mobile (when items in cart) */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-20 left-3.5 right-3.5 sm:left-6 sm:right-6 lg:hidden z-30 flex items-center justify-between gap-3 p-3 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700/60 backdrop-blur-md animate-in slide-in-from-bottom-3 duration-200">
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 font-black text-xs text-white shrink-0 shadow-xs">
+              {totalItemsCount}
+            </div>
+            <div className="truncate">
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Belanja</p>
+              <p className="text-sm font-black text-white truncate">{formatCurrency(total)}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => {
+                const el = document.getElementById('pos-cart-panel');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-all cursor-pointer"
+            >
+              Lihat Rincian
+            </button>
+            <button
+              onClick={() => handleQuickPay('Tunai')}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-xs font-extrabold text-white transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <Banknote className="h-4 w-4" />
+              <span>Bayar</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Barcode Camera Scanner Modal */}
       <BarcodeScannerModal

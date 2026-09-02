@@ -1,4 +1,5 @@
 import React from 'react';
+import { APP_CONFIG } from '../../utils/appConfig';
 
 interface DelPOSLogoProps {
   variant?: 'full' | 'icon-only' | 'splash' | 'compact' | 'badge';
@@ -13,7 +14,7 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
   size = 'md',
   className = '',
   theme = 'light',
-  showPoweredBy = true,
+  showPoweredBy = false,
 }) => {
   // Dimension scales
   const sizeConfig = {
@@ -80,11 +81,6 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
         </linearGradient>
 
         {/* Filters for 3D depth */}
-        <filter id="delpos_glow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
-          <feGaussianBlur stdDeviation="3" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-
         <filter id="delpos_shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="2" dy="5" stdDeviation="4" floodColor="#000000" floodOpacity="0.3" />
         </filter>
@@ -92,88 +88,61 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
 
       {/* Outer 3D "D" Letter Silhouette */}
       <g filter="url(#delpos_shadow)">
-        {/* Back 3D Extrusion */}
         <path
           d="M 32 20 H 115 C 162 20 188 56 188 100 C 188 144 162 180 115 180 H 32 Z"
           fill="url(#delpos_blue_shadow)"
         />
-        
-        {/* Front Glossy Blue D Surface */}
         <path
           d="M 28 15 H 112 C 158 15 182 50 182 95 C 182 140 158 175 112 175 H 28 Z"
           fill="url(#delpos_blue_main)"
         />
-
-        {/* Inner Cutout Hole of the "D" (creating the bold loop) */}
         <path
           d="M 64 52 H 105 C 132 52 148 70 148 95 C 148 120 132 138 105 138 H 64 Z"
           fill="#FFFFFF"
         />
-
-        {/* Top Glaze / Highlight Arc */}
         <path
           d="M 28 15 H 112 C 142 15 168 35 178 68 C 160 38 130 25 105 25 H 35 Z"
           fill="url(#delpos_blue_highlight)"
         />
       </g>
 
-      {/* --- INNER CONTENT: POS TERMINAL + THERMAL RECEIPT --- */}
+      {/* INNER POS TERMINAL */}
       <g filter="url(#delpos_shadow)" transform="translate(10, 25)">
-        {/* Terminal Dark Base */}
         <rect x="25" y="65" width="62" height="42" rx="10" fill="url(#delpos_terminal_base)" />
-        
-        {/* Terminal Front Face (Angled POS) */}
         <rect x="28" y="45" width="56" height="58" rx="8" fill="url(#delpos_terminal_top)" />
 
-        {/* Thermal Receipt Paper Roll Out */}
+        {/* Thermal Receipt */}
         <path
           d="M 36 10 C 36 8 38 5 42 5 H 70 C 74 5 76 8 76 10 V 48 H 36 Z"
           fill="#FFFFFF"
           filter="url(#delpos_shadow)"
         />
-        {/* Paper top curl wave */}
-        <path
-          d="M 36 10 C 44 4 52 12 60 7 C 68 3 76 9 76 10"
-          stroke="#E2E8F0"
-          strokeWidth="2"
-          fill="none"
-        />
-        {/* Printed Lines on Thermal Paper */}
         <line x1="42" y1="15" x2="70" y2="15" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" />
         <line x1="42" y1="22" x2="65" y2="22" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" />
         <line x1="42" y1="29" x2="68" y2="29" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" />
         <line x1="42" y1="36" x2="58" y2="36" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" />
 
-        {/* Terminal Screen & Keypad */}
         <rect x="34" y="52" width="44" height="15" rx="3" fill="#0284C7" />
-        
-        {/* Keypad Buttons (3x3 grid) */}
         <rect x="34" y="73" width="10" height="7" rx="2" fill="#3B82F6" />
         <rect x="51" y="73" width="10" height="7" rx="2" fill="#3B82F6" />
         <rect x="68" y="73" width="10" height="7" rx="2" fill="#10B981" />
-
         <rect x="34" y="83" width="10" height="7" rx="2" fill="#3B82F6" />
         <rect x="51" y="83" width="10" height="7" rx="2" fill="#3B82F6" />
         <rect x="68" y="83" width="10" height="7" rx="2" fill="#3B82F6" />
-
         <rect x="34" y="93" width="10" height="6" rx="2" fill="#EF4444" />
         <rect x="51" y="93" width="10" height="6" rx="2" fill="#F59E0B" />
         <rect x="68" y="93" width="10" height="6" rx="2" fill="#10B981" />
       </g>
 
-      {/* --- GREEN GROWTH ANALYTICS CHART BARS --- */}
+      {/* GREEN GROWTH BARS */}
       <g filter="url(#delpos_shadow)" transform="translate(102, 68)">
-        {/* Bar 1 (Short) */}
         <rect x="0" y="24" width="10" height="26" rx="3" fill="url(#delpos_green_bar)" />
-        {/* Bar 2 (Medium) */}
         <rect x="14" y="12" width="10" height="38" rx="3" fill="url(#delpos_green_bar)" />
-        {/* Bar 3 (Tall) */}
         <rect x="28" y="0" width="10" height="50" rx="3" fill="url(#delpos_green_bar)" />
       </g>
 
-      {/* --- GOLDEN/ORANGE CURVED GROWTH ARROW --- */}
+      {/* GROWTH ARROW */}
       <g filter="url(#delpos_shadow)">
-        {/* Curved Trail */}
         <path
           d="M 50 162 C 90 168 140 155 168 85"
           fill="none"
@@ -181,15 +150,8 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
           strokeWidth="11"
           strokeLinecap="round"
         />
-        {/* Glowing Arrowhead */}
-        <polygon
-          points="160,70 186,80 172,106"
-          fill="#FFAA00"
-        />
-        <polygon
-          points="163,73 183,82 172,102"
-          fill="#FFD000"
-        />
+        <polygon points="160,70 186,80 172,106" fill="#FFAA00" />
+        <polygon points="163,73 183,82 172,102" fill="#FFD000" />
       </g>
     </svg>
   );
@@ -199,7 +161,7 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
     return <div className={`inline-flex items-center justify-center ${className}`}>{render3DIcon(iconDimension)}</div>;
   }
 
-  // 2. BADGE / APP ICON SQUIRCLE (Play Store / Favicon Style)
+  // 2. BADGE / APP ICON SQUIRCLE
   if (variant === 'badge') {
     return (
       <div
@@ -208,26 +170,22 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
           boxShadow: '0 12px 30px rgba(0, 85, 255, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.4)',
         }}
       >
-        {/* Subtle shine highlight overlay */}
         <div className="absolute -top-12 -left-12 w-32 h-32 bg-white/15 rounded-full blur-xl pointer-events-none" />
-        
         {render3DIcon(iconDimension * 1.3)}
-
         <div className="mt-1 text-center">
           <span className="font-black text-white tracking-wider text-xl sm:text-2xl drop-shadow-md">
-            Del<span className="text-cyan-300">POS</span>
+            Del<span className="text-cyan-300">Pos</span>
           </span>
         </div>
       </div>
     );
   }
 
-  // 3. SPLASH SCREEN VARIANT (Dark Navy with glow)
+  // 3. SPLASH SCREEN VARIANT
   if (variant === 'splash') {
     return (
       <div className={`flex flex-col items-center justify-center text-center select-none ${className}`}>
         <div className="relative">
-          {/* Radial Glow */}
           <div className="absolute inset-0 bg-[#0066ff]/25 blur-3xl rounded-full scale-150 pointer-events-none" />
           {render3DIcon(iconDimension * 1.5)}
         </div>
@@ -236,18 +194,12 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
           <div className="flex items-center justify-center gap-1 font-black text-4xl sm:text-5xl tracking-tight text-white">
             <span className="text-white">Del</span>
             <span className="bg-gradient-to-r from-[#00A2FF] to-[#0066FF] bg-clip-text text-transparent">
-              POS
+              Pos
             </span>
           </div>
-          {showPoweredBy && (
-            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-slate-300 font-semibold tracking-wide">
-              <span className="h-px w-6 bg-slate-500/60" />
-              <span>
-                powered by <span className="font-bold text-[#38BDF8]">AkuPos</span> system
-              </span>
-              <span className="h-px w-6 bg-slate-500/60" />
-            </div>
-          )}
+          <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-slate-300 font-medium tracking-wide">
+            <span>{APP_CONFIG.tagline}</span>
+          </div>
         </div>
       </div>
     );
@@ -264,23 +216,17 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
         <div className={`font-black ${sizeConfig.textScale} tracking-tight flex items-center`}>
           <span className={isDark ? 'text-white' : 'text-[#0F172A]'}>Del</span>
           <span className="bg-gradient-to-r from-[#0088FF] to-[#0055EE] bg-clip-text text-transparent">
-            POS
+            Pos
           </span>
         </div>
 
-        {showPoweredBy && (
-          <div
-            className={`flex items-center gap-1.5 ${sizeConfig.subScale} font-semibold tracking-tight mt-0.5 ${
-              isDark ? 'text-slate-400' : 'text-[#64748B]'
-            }`}
-          >
-            <span className="h-px w-2.5 bg-slate-400/50" />
-            <span>
-              powered by <span className="font-bold text-[#0066FF]">AkuPos</span>
-            </span>
-            <span className="h-px w-2.5 bg-slate-400/50" />
-          </div>
-        )}
+        <div
+          className={`flex items-center gap-1 text-[10px] font-medium tracking-tight mt-0.5 ${
+            isDark ? 'text-slate-400' : 'text-[#64748B]'
+          }`}
+        >
+          <span>Smart POS & Finance</span>
+        </div>
       </div>
     </div>
   );

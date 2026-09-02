@@ -19,6 +19,8 @@ import {
   QrCode,
   FileSpreadsheet,
   X,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { MainTab } from '../types';
@@ -39,6 +41,7 @@ export const Sidebar: React.FC = () => {
     googleSheetsConfig,
     logoutUser,
     storeProfile,
+    setIsPwaInstallModalOpen,
   } = useApp();
 
   const lowStockCount = products.filter((p) => p.stock <= (p.minStockAlert ?? 5)).length;
@@ -253,6 +256,27 @@ export const Sidebar: React.FC = () => {
 
         {/* Bottom Section */}
         <div className="border-t border-[#f3f2fa] p-3.5 bg-slate-50/50 space-y-2.5">
+          {/* Pasang APK / Standalone App Button */}
+          <button
+            id="sidebar-pwa-install-btn"
+            onClick={() => {
+              setIsPwaInstallModalOpen(true);
+              if (window.innerWidth < 1024) setIsSidebarOpen(false);
+            }}
+            className="flex w-full items-center justify-between p-2 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-indigo-200/80 hover:bg-indigo-100/70 hover:border-indigo-300 transition-all text-left shadow-2xs group cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-1 rounded-lg bg-indigo-600 text-white shadow-2xs">
+                <Smartphone className="h-3.5 w-3.5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-indigo-950">Pasang APK / PWA</p>
+                <p className="text-[9px] text-indigo-600 font-semibold">Mode Layar Penuh HP</p>
+              </div>
+            </div>
+            <Download className="h-3.5 w-3.5 text-indigo-500 group-hover:translate-y-0.5 transition-transform" />
+          </button>
+
           {/* Quick Analytics Pill */}
           <div
             onClick={() => handleNavClick('reports')}

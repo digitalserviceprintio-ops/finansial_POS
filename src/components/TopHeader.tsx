@@ -20,12 +20,16 @@ import {
   Sparkles,
   ShoppingCart,
   Zap,
+  Smartphone,
+  Download,
+  Lock,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DigitalClockAndCalendar } from './DigitalClockAndCalendar';
 import { BluetoothPrinterModal } from './modals/BluetoothPrinterModal';
 import { InAppNotification } from '../types';
 import { DelPOSLogo } from './brand/DelPOSLogo';
+import { APP_CONFIG } from '../utils/appConfig';
 
 export const TopHeader: React.FC = () => {
   const {
@@ -50,6 +54,9 @@ export const TopHeader: React.FC = () => {
     markAllNotificationsAsRead,
     clearNotifications,
     deleteNotification,
+    setIsPwaInstallModalOpen,
+    lockAppNow,
+    lockDurationMinutes,
   } = useApp();
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -140,11 +147,11 @@ export const TopHeader: React.FC = () => {
                 <DelPOSLogo variant="compact" size="md" showPoweredBy={false} />
                 <div className="hidden lg:block h-5 w-px bg-slate-200" />
                 <div className="hidden sm:block">
-                  <p className="text-xs font-black text-[#1b1b23] leading-none truncate max-w-[130px] md:max-w-[180px] lg:max-w-[220px]">
+                  <p className="text-xs font-black text-[#1b1b23] leading-none truncate max-w-[120px] md:max-w-[180px] lg:max-w-[220px]">
                     {storeProfile.name}
                   </p>
-                  <p className="text-[10px] text-[#767680] font-semibold leading-tight mt-0.5 truncate max-w-[130px] md:max-w-[180px] lg:max-w-[220px]">
-                    {storeProfile.branch ? `Cabang ${storeProfile.branch}` : 'powered by AkuPos'}
+                  <p className="text-[10px] text-[#767680] font-semibold leading-tight mt-0.5 truncate max-w-[120px] md:max-w-[180px] lg:max-w-[220px]">
+                    {storeProfile.branch ? `Cabang ${storeProfile.branch}` : APP_CONFIG.tagline}
                   </p>
                 </div>
               </div>
@@ -207,6 +214,18 @@ export const TopHeader: React.FC = () => {
                 <span className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-white/20 text-white">
                   F4
                 </span>
+              </button>
+
+              {/* Install APK / PWA Standalone App Button */}
+              <button
+                id="header-install-pwa-btn"
+                onClick={() => setIsPwaInstallModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/80 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-all shadow-2xs cursor-pointer shrink-0"
+                title="Pasang Aplikasi DelPOS (Android APK & PWA)"
+              >
+                <Smartphone className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600 shrink-0" />
+                <span className="hidden sm:inline">Pasang</span>
+                <span>APK</span>
               </button>
 
               {/* Real-time Digital Clock & Interactive Calendar */}
@@ -437,7 +456,7 @@ export const TopHeader: React.FC = () => {
                           <Package className="h-3.5 w-3.5 text-indigo-600" />
                           <span>Kelola Master Produk</span>
                         </button>
-                        <span className="text-[10px] text-slate-400">DelPOS by AkuPos</span>
+                        <span className="text-[10px] text-slate-400">{APP_CONFIG.brand} v{APP_CONFIG.version}</span>
                       </div>
                     </div>
                   </>
@@ -521,6 +540,21 @@ export const TopHeader: React.FC = () => {
                       >
                         <Store className="h-4 w-4 text-[#4648d4]" />
                         <span>Profil & Pengaturan Toko</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          lockAppNow();
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Lock className="h-4 w-4 text-amber-600" />
+                          <span>Kunci Layar Kasir</span>
+                        </div>
+                        <span className="text-[10px] bg-amber-100 px-1.5 py-0.5 rounded font-bold text-amber-800">
+                          {lockDurationMinutes}m
+                        </span>
                       </button>
                       <div className="border-t border-[#f3f2fa] my-1"></div>
                       <button
