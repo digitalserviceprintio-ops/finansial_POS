@@ -14,6 +14,9 @@ import {
   Sparkles,
   Inbox,
   AlertCircle,
+  AlertTriangle,
+  Clock,
+  LogOut,
   HelpCircle,
   Smartphone,
   ChevronRight,
@@ -56,9 +59,16 @@ export const AuthView: React.FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Login Form Data
+  // Login Form Data & Multi-Device Conflict State
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+  const [isCheckingConflict, setIsCheckingConflict] = useState(false);
+  const [deviceConflict, setDeviceConflict] = useState<{
+    userEmail: string;
+    deviceName: string;
+    loggedInAt: string;
+  } | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -188,22 +198,61 @@ export const AuthView: React.FC = () => {
     showToast(`Kode baru telah dikirimkan ke email ${verifEmail}`, 'info');
   };
 
-  // Submit Login
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Submit Login with Multi-Device Check
+  const handleLoginSubmit = async (e?: React.FormEvent, forceOverride: boolean = false) => {
+    if (e) e.preventDefault();
     setErrorMessage('');
+    setDeviceConflict(null);
 
     if (!loginEmail.trim()) {
       setErrorMessage('Harap masukkan email Anda.');
       return;
     }
 
-    const res = loginWithCredentials(loginEmail.trim(), loginPassword);
-    if (res.success) {
-      showToast('Masuk berhasil! Membuka sesi kasir...', 'success');
-    } else {
-      setErrorMessage(res.message);
+    setIsSubmittingLogin(true);
+    try {
+      const res = await loginWithCredentials(loginEmail.trim(), loginPassword, forceOverride);
+      if (res.success) {
+        showToast(res.message, 'success');
+        setDeviceConflict(null);
+      } else if (res.isDeviceConflict && res.conflictSession) {
+        setDeviceConflict({
+          userEmail: loginEmail.trim(),
+          deviceName: res.conflictSession.deviceName || 'Perangkat Lain',
+          loggedInAt: res.conflictSession.loggedInAt,
+        });
+      } else {
+        setErrorMessage(res.message);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Gagal masuk. Silakan coba lagi.');
+    } finally {
+      setIsSubmittingLogin(false);
     }
+  };
+
+  // Recheck if previous device has logged out
+  const handleRecheckSession = async () => {
+    setIsCheckingConflict(true);
+    setErrorMessage('');
+    try {
+      const res = await loginWithCredentials(loginEmail.trim(), loginPassword, false);
+      if (res.success) {
+        showToast('🎉 Perangkat sebelumnya telah logout! Masuk berhasil...', 'success');
+        setDeviceConflict(null);
+      } else if (res.isDeviceConflict) {
+        showToast('⚠️ Perangkat lama masih aktif. Anda harus logout terlebih dahulu dari perangkat tersebut.', 'warning');
+      } else {
+        setErrorMessage(res.message);
+      }
+    } finally {
+      setIsCheckingConflict(false);
+    }
+  };
+
+  // Force takeover if old device is broken/lost/inaccessible
+  const handleForceOverride = async () => {
+    await handleLoginSubmit(undefined, true);
   };
 
   return (
@@ -295,8 +344,78 @@ export const AuthView: React.FC = () => {
 
           {/* Form Content Area */}
           <div className="p-6 sm:p-8 space-y-6">
-            {/* Error Alert Message */}
-            {errorMessage && (
+            {/* Multi-Device Login Conflict Warning */}
+            {deviceConflict && (
+              <div className="rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-50 to-orange-50 p-4 sm:p-5 shadow-md space-y-3.5 animate-in fade-in slide-in-from-top-3 duration-200">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500 text-white shrink-0 shadow-xs">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-amber-200/80 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-900">
+                        Peringatan Perangkat Ganda
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-amber-950 mt-1">
+                      Akun Sedang Aktif di Perangkat Lain
+                    </h4>
+                    <p className="text-xs text-amber-900/90 mt-1 leading-relaxed">
+                      Akun <strong className="text-amber-950">{deviceConflict.userEmail}</strong> saat ini terdeteksi sedang aktif dan terkunci di perangkat:
+                    </p>
+
+                    {/* Active Device Info Box */}
+                    <div className="mt-2.5 rounded-xl border border-amber-200 bg-white/90 p-3 text-xs space-y-1.5 shadow-2xs">
+                      <div className="flex items-center gap-2 text-slate-800">
+                        <Smartphone className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span className="font-bold truncate">{deviceConflict.deviceName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                        <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <span>Waktu Masuk: {new Date(deviceConflict.loggedInAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                      </div>
+                    </div>
+
+                    {/* Strict System Rule Notice */}
+                    <div className="mt-2.5 rounded-xl bg-amber-200/50 p-3 text-xs text-amber-950 leading-relaxed border border-amber-300/60">
+                      <p className="font-bold flex items-center gap-1 text-amber-900">
+                        <span>🔒 Kebijakan Keamanan Kasir:</span>
+                      </p>
+                      <p className="mt-1">
+                        Satu akun kasir/toko hanya dapat aktif pada <strong>1 perangkat dalam satu waktu</strong> untuk mencegah bentrok data transaksi offline/online. 
+                        <strong className="text-red-700 block mt-1">Harus log out terlebih dahulu dari perangkat tersebut jika mau pindah perangkat.</strong>
+                      </p>
+                    </div>
+
+                    {/* Interactive Action Controls */}
+                    <div className="mt-3.5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRecheckSession}
+                        disabled={isCheckingConflict}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2.5 text-xs font-bold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${isCheckingConflict ? 'animate-spin' : ''}`} />
+                        <span>{isCheckingConflict ? 'Memeriksa Status...' : 'Cek Status Logout & Masuk Ulang'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleForceOverride}
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-white hover:bg-amber-100 text-amber-950 px-3 py-2.5 text-[11px] font-semibold transition-all cursor-pointer"
+                        title="Gunakan ini jika perangkat sebelumnya hilang, rusak, atau baterai habis"
+                      >
+                        <LogOut className="h-3.5 w-3.5 text-amber-700" />
+                        <span>Paksa Logout & Masuk Disini</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Error Alert Message (only when not device conflict) */}
+            {errorMessage && !deviceConflict && (
               <div className="flex items-center gap-2.5 rounded-2xl bg-red-50 border border-red-200 p-3.5 text-xs text-red-700 animate-in fade-in duration-150">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>{errorMessage}</span>
@@ -601,10 +720,20 @@ export const AuthView: React.FC = () => {
                 <button
                   id="submit-login-btn"
                   type="submit"
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4648d4] py-3.5 text-xs font-bold text-white shadow-md hover:bg-[#3435ad] transition-all active:scale-98"
+                  disabled={isSubmittingLogin}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4648d4] py-3.5 text-xs font-bold text-white shadow-md hover:bg-[#3435ad] transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
                 >
-                  <span>Masuk ke Dashboard</span>
-                  <ArrowRight className="h-4 w-4" />
+                  {isSubmittingLogin ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>Memverifikasi Sesi Perangkat...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Masuk ke Dashboard</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
                 </button>
 
                 {/* Divider for Quick Demo Logins */}

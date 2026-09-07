@@ -11,6 +11,7 @@ import {
   PaymentMethod,
   CategoryItem,
   AuthUser,
+  DeviceSession,
   BackupData,
   AppLicense,
   InAppNotification,
@@ -31,6 +32,15 @@ import {
 import { SecureVault, generateTenantId } from '../utils/security';
 import { LicenseManager } from '../utils/licenseManager';
 import { sendPayloadToGoogleAppsScript } from '../utils/googleAppsScript';
+import {
+  fetchRegisteredUsersFromFirestore,
+  saveUserToFirestore,
+  getUserFromFirestoreByEmail,
+  setUserActiveSessionInFirestore,
+  clearUserActiveSessionInFirestore,
+  subscribeToUserSession,
+} from '../utils/firebase';
+import { getCurrentDeviceInfo, getDeviceId, CurrentDeviceInfo } from '../utils/deviceInfo';
 
 interface ToastNotification {
   id: string;
@@ -72,9 +82,20 @@ interface AppContextType {
   ) => Promise<{ success: boolean; code: string }>;
   verifyEmailCode: (email: string, code: string) => { success: boolean; message: string };
   resendVerificationCode: (email: string) => string;
-  loginWithCredentials: (email: string, passwordOrPin?: string) => { success: boolean; message: string };
-  loginAsDemoUser: (userType: 'owner' | 'cashier' | 'budi' | 'siti') => void;
-  logoutUser: () => void;
+  loginWithCredentials: (
+    email: string,
+    passwordOrPin?: string,
+    forceOverride?: boolean
+  ) => Promise<{
+    success: boolean;
+    message: string;
+    isDeviceConflict?: boolean;
+    conflictSession?: DeviceSession;
+    userEmail?: string;
+  }>;
+  currentDeviceInfo: CurrentDeviceInfo;
+  loginAsDemoUser: (userType: 'owner' | 'cashier' | 'budi' | 'siti') => Promise<void>;
+  logoutUser: () => Promise<void>;
 
   // Auto-Lock & Session Security
   isAppLocked: boolean;
@@ -290,6 +311,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : initialAuthUsers[0];
   });
 
+  const [currentDeviceInfo] = useState<CurrentDeviceInfo>(() => getCurrentDeviceInfo());
+
   // Auto-Lock Inactivity Security State (Default 10 minutes)
   const [lockDurationMinutes, setLockDurationMinutes] = useState<number>(() => {
     const saved = localStorage.getItem('delpos_lock_duration_minutes');
@@ -501,6 +524,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser]);
 
+  // Fetch and synchronize registered users across devices from Cloud Firestore
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncFirestoreAccounts() {
+      try {
+        const cloudUsers = await fetchRegisteredUsersFromFirestore();
+        if (!isMounted) return;
+
+        if (cloudUsers && cloudUsers.length > 0) {
+          setRegisteredUsers((prevLocal) => {
+            const userMap = new Map<string, AuthUser>();
+            // 1. Initial demo users
+            initialAuthUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+            // 2. Local saved users
+            prevLocal.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+            // 3. Firestore registered accounts (primary source across devices)
+            cloudUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+            const merged = Array.from(userMap.values());
+            localStorage.setItem('finansialpro_registered_users', JSON.stringify(merged));
+            return merged;
+          });
+        } else {
+          // Initialize Firestore with default initial users so they are available on any device
+          for (const u of initialAuthUsers) {
+            await saveUserToFirestore(u);
+          }
+        }
+      } catch (err) {
+        console.warn('Firestore initial sync notice:', err);
+      }
+    }
+
+    syncFirestoreAccounts();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Real-time Single-Device Active Session Monitor:
+  // If user is currently logged in on this device, and session is claimed by another device:
+  useEffect(() => {
+    if (!currentUser?.email) return;
+
+    const myDeviceId = getDeviceId();
+    const unsubscribe = subscribeToUserSession(currentUser.email, (session) => {
+      // If another device became active with a different deviceId
+      if (session && session.isActive && session.deviceId && session.deviceId !== myDeviceId) {
+        showToast(
+          `⚠️ Akun Anda telah login di perangkat lain (${session.deviceName || 'Perangkat Baru'}). Sesi di perangkat ini dinonaktifkan otomatis.`,
+          'warning'
+        );
+        setCurrentUser(null);
+        setCurrentTab('login');
+        setIsAppLocked(false);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser?.email]);
+
   useEffect(() => {
     SecureVault.setTenantItem(currentTenantId, 'store', storeProfile);
   }, [currentTenantId, storeProfile]);
@@ -648,6 +734,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'Kode verifikasi telah kadaluarsa. Silakan kirim ulang kode baru.' };
     }
 
+    // Register current device session
+    const currentDev = getCurrentDeviceInfo();
+    const newSession: DeviceSession = {
+      deviceId: currentDev.deviceId,
+      deviceName: currentDev.deviceName,
+      loggedInAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      isActive: true,
+    };
+
     // Create & register user
     const newUserId = `USR-${String(registeredUsers.length + 1).padStart(3, '0')}`;
     const newUser: AuthUser = {
@@ -660,8 +756,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isEmailVerified: true,
       avatarUrl:
         'https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_UeVtMqix0sJCZHs2TtKM5-d72Pea84EAktZj50a8963OhMvLReqs1NHQ5_GHU31yQIOvnrJgSfVJ_GeiKlPatJEFijCOybVvFFiMGK5NOxgk9QrAVW_iXOt0iW_JoPaZYQPCnyP7yXiRGmSsKfKm7wGSICkKlm5wlq8E4GuzgUAsgAUa1swPQ-m8CDYgnJ9jjXFUt_9CTSEQH_yEVGaOFNO6eA39ylX7lz2CTC7oAh5YPsc0Mc',
+      password: pending.userData.password || 'admin123',
+      pinCode: '123456',
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
+      activeSession: newSession,
     };
 
     // Update store profile with business name and owner
@@ -677,6 +776,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(newUser);
     setCurrentTab('dashboard');
 
+    // Persist newly registered account and active session to Firestore
+    saveUserToFirestore(newUser).catch((err) => console.warn('Could not save user to Firestore:', err));
+    setUserActiveSessionInFirestore(emailKey, newSession).catch((err) => console.warn('Could not set session in Firestore:', err));
+
     // Clean pending
     const updatedPending = { ...pendingVerifications };
     delete updatedPending[emailKey];
@@ -685,47 +788,141 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: 'Verifikasi berhasil!' };
   };
 
-  const loginWithCredentials = (
+  const loginWithCredentials = async (
     email: string,
-    passwordOrPin?: string
-  ): { success: boolean; message: string } => {
+    passwordOrPin?: string,
+    forceOverride?: boolean
+  ): Promise<{
+    success: boolean;
+    message: string;
+    isDeviceConflict?: boolean;
+    conflictSession?: DeviceSession;
+    userEmail?: string;
+  }> => {
     const emailKey = email.toLowerCase().trim();
-    const existing = registeredUsers.find((u) => u.email.toLowerCase() === emailKey);
 
-    if (existing) {
-      const updatedUser: AuthUser = {
-        ...existing,
-        lastLoginAt: new Date().toISOString(),
-      };
-      setCurrentUser(updatedUser);
-      setCashierName(updatedUser.fullName);
-      setCurrentTab('dashboard');
-      return { success: true, message: 'Masuk berhasil!' };
+    // 1. Fetch latest user doc from Cloud Firestore for cross-device support
+    let targetUser: AuthUser | null = null;
+    try {
+      targetUser = await getUserFromFirestoreByEmail(emailKey);
+    } catch (err) {
+      console.warn('Could not retrieve user from Firestore, checking local storage:', err);
     }
 
+    if (!targetUser) {
+      targetUser = registeredUsers.find((u) => u.email.toLowerCase() === emailKey) || null;
+    }
+
+    if (!targetUser) {
+      return {
+        success: false,
+        message: 'Akun dengan email ini belum terdaftar di perangkat manapun. Silakan lakukan pendaftaran terlebih dahulu.',
+      };
+    }
+
+    // 2. Validate Password / PIN if provided
+    if (targetUser.password && passwordOrPin) {
+      const trimmed = passwordOrPin.trim();
+      const isPassValid = targetUser.password === trimmed;
+      const isPinValid = targetUser.pinCode === trimmed;
+      if (!isPassValid && !isPinValid) {
+        return {
+          success: false,
+          message: 'Kata sandi atau PIN salah. Silakan periksa kembali.',
+        };
+      }
+    }
+
+    // 3. Multi-Device Single Active Session Verification
+    const currentDev = getCurrentDeviceInfo();
+    const activeSession = targetUser.activeSession;
+
+    // Check if session is active on another device and not overridden
+    if (
+      activeSession &&
+      activeSession.isActive &&
+      activeSession.deviceId &&
+      activeSession.deviceId !== currentDev.deviceId
+    ) {
+      if (!forceOverride) {
+        return {
+          success: false,
+          message: `Akun ini sedang aktif di perangkat lain (${activeSession.deviceName}). Anda harus log out terlebih dahulu dari perangkat tersebut jika mau pindah perangkat.`,
+          isDeviceConflict: true,
+          conflictSession: activeSession,
+          userEmail: targetUser.email,
+        };
+      }
+    }
+
+    // 4. Session approved: Register current device as active session
+    const newSession: DeviceSession = {
+      deviceId: currentDev.deviceId,
+      deviceName: currentDev.deviceName,
+      loggedInAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      isActive: true,
+    };
+
+    const updatedUser: AuthUser = {
+      ...targetUser,
+      lastLoginAt: new Date().toISOString(),
+      activeSession: newSession,
+    };
+
+    try {
+      await setUserActiveSessionInFirestore(emailKey, newSession);
+      await saveUserToFirestore(updatedUser);
+    } catch (err) {
+      console.warn('Could not write active session to Firestore:', err);
+    }
+
+    // Update local state
+    setRegisteredUsers((prev) => [updatedUser, ...prev.filter((u) => u.email.toLowerCase() !== emailKey)]);
+    setCurrentUser(updatedUser);
+    setCashierName(updatedUser.fullName);
+    setStoreProfile((prev) => ({
+      ...prev,
+      name: updatedUser.businessName || prev.name,
+      owner: updatedUser.fullName || prev.owner,
+      phone: updatedUser.phone || prev.phone,
+    }));
+    setCurrentTab('dashboard');
+
     return {
-      success: false,
-      message: 'Email belum terdaftar. Silakan lakukan pendaftaran terlebih dahulu.',
+      success: true,
+      message: forceOverride
+        ? 'Berhasil beralih perangkat! Sesi perangkat lama telah dipindahkan ke sini.'
+        : 'Masuk berhasil! Selamat bertugas.',
     };
   };
 
-  const loginAsDemoUser = (userType: 'owner' | 'cashier' | 'budi' | 'siti') => {
+  const loginAsDemoUser = async (userType: 'owner' | 'cashier' | 'budi' | 'siti') => {
     const target =
       userType === 'owner' || userType === 'budi'
         ? initialAuthUsers[0]
         : initialAuthUsers[1];
 
-    setCurrentUser(target);
-    setCashierName(target.fullName);
-    setCurrentTab('dashboard');
-    showToast(`Masuk sebagai ${target.fullName} (${target.role === 'owner' ? 'Pemilik' : 'Kasir'})`, 'success');
+    const res = await loginWithCredentials(target.email, target.password || 'admin123', true);
+    if (res.success) {
+      showToast(`Masuk sebagai ${target.fullName} (${target.role === 'owner' ? 'Pemilik' : 'Kasir'})`, 'success');
+    } else {
+      showToast(res.message, 'warning');
+    }
   };
 
-  const logoutUser = () => {
+  const logoutUser = async () => {
+    if (currentUser?.email) {
+      try {
+        await clearUserActiveSessionInFirestore(currentUser.email);
+      } catch (err) {
+        console.warn('Could not clear active session in Firestore on logout:', err);
+      }
+    }
     setCurrentUser(null);
     setIsAppLocked(false);
     setCurrentTab('login');
-    showToast('Anda telah keluar dari sesi kasir.', 'info');
+    showToast('Anda telah keluar dari akun. Sesi di perangkat ini telah ditutup.', 'info');
   };
 
   // Activity tracking and auto-lock after specified minutes (default 10 minutes)
@@ -1583,6 +1780,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSidebarOpen,
         setIsSidebarOpen,
         currentUser,
+        currentDeviceInfo,
         isAuthenticated: !!currentUser,
         registeredUsers,
         sendVerificationEmail,

@@ -40,6 +40,7 @@ export const TopHeader: React.FC = () => {
     storeProfile,
     cashierName,
     currentUser,
+    currentDeviceInfo,
     currentTab,
     setCurrentTab,
     products,
@@ -505,9 +506,17 @@ export const TopHeader: React.FC = () => {
                       <div className="p-3 bg-[#fcf8ff] rounded-xl mb-2">
                         <p className="text-xs font-bold text-[#1b1b23]">{currentUser?.fullName || storeProfile.owner}</p>
                         <p className="text-[11px] text-[#767680] truncate">{currentUser?.email || storeProfile.branch}</p>
-                        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md font-medium w-fit">
-                          <UserCheck className="h-3 w-3" />
-                          <span>Email Terverifikasi</span>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <div className="flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md font-medium">
+                            <UserCheck className="h-3 w-3" />
+                            <span>Terverifikasi</span>
+                          </div>
+                          {currentDeviceInfo && (
+                            <div className="flex items-center gap-1 text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md font-medium max-w-[140px]" title={currentDeviceInfo.deviceName}>
+                              <Smartphone className="h-3 w-3 text-slate-500 shrink-0" />
+                              <span className="truncate">{currentDeviceInfo.deviceName}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -565,7 +574,10 @@ export const TopHeader: React.FC = () => {
                         className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-[#ba1a1a] hover:bg-red-50 transition-colors"
                       >
                         <LogOut className="h-4 w-4" />
-                        <span>Keluar Akun (Logout)</span>
+                        <div className="text-left">
+                          <span>Keluar Akun (Logout)</span>
+                          <span className="block text-[10px] text-[#ba1a1a]/70 font-normal">Lepas sesi untuk pindah perangkat</span>
+                        </div>
                       </button>
                     </div>
                   </>

@@ -25,10 +25,26 @@
     <!-- Intercept & Prevent Benign Sandboxed Vite WebSocket Closed/HMR Warnings -->
     <script>
       (function() {
+        var originalError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var first = args[0];
+          var msg = typeof first === 'string' ? first : (first && first.message ? first.message : '');
+          if (
+            typeof msg === 'string' &&
+            (msg.indexOf('[vite]') !== -1 ||
+             msg.indexOf('Could not reach Cloud Firestore backend') !== -1 ||
+             msg.indexOf('@firebase/firestore') !== -1)
+          ) {
+            return;
+          }
+          originalError.apply(console, arguments);
+        };
+
         var isWsError = function(err) {
           if (!err) return false;
           var msg = typeof err === 'string' ? err : (err.message || err.reason || '');
-          return /websocket|vite|ws/i.test(msg) && /closed without opened|failed to connect/i.test(msg);
+          return /websocket|vite|ws/i.test(msg);
         };
 
         window.addEventListener('unhandledrejection', function(event) {

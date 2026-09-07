@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "RegisteredUser": {
+      "title": "RegisteredUser",
+      "description": "Registered user accounts for DelPOS UMKM application with device session tracking",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the user"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full name of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number"
+        },
+        "businessName": {
+          "type": "string",
+          "description": "Registered UMKM business name"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["owner", "admin", "cashier"]
+        },
+        "isEmailVerified": {
+          "type": "boolean"
+        },
+        "password": {
+          "type": "string"
+        },
+        "pinCode": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "lastLoginAt": {
+          "type": "string"
+        },
+        "activeSession": {
+          "type": "object",
+          "description": "Single active device session tracking object"
+        }
+      },
+      "required": ["id", "fullName", "email"]
+    }
+  },
+  "firestore": {
+    "/registered_users/{userId}": {
+      "schema": "RegisteredUser",
+      "description": "Collection of registered users and their single active login device session"
+    }
+  }
+}

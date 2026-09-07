@@ -19,6 +19,15 @@ export type MainTab =
   | 'customer_catalog'
   | 'login';
 
+export interface DeviceSession {
+  deviceId: string;
+  deviceName: string;
+  loggedInAt: string;
+  lastActiveAt?: string;
+  isActive: boolean;
+  ip?: string;
+}
+
 export interface AuthUser {
   id: string;
   fullName: string;
@@ -32,6 +41,7 @@ export interface AuthUser {
   pinCode?: string;
   createdAt: string;
   lastLoginAt: string;
+  activeSession?: DeviceSession | null;
 }
 
 export interface BackupData {
