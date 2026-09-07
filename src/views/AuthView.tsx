@@ -33,7 +33,6 @@ export const AuthView: React.FC = () => {
     verifyEmailCode,
     resendVerificationCode,
     loginWithCredentials,
-    loginAsDemoUser,
     isEmailModalOpen,
     setIsEmailModalOpen,
     latestSimulatedEmail,
@@ -735,55 +734,6 @@ export const AuthView: React.FC = () => {
                     </>
                   )}
                 </button>
-
-                {/* Divider for Quick Demo Logins */}
-                <div className="relative flex items-center justify-center my-4">
-                  <div className="w-full border-t border-[#e2e1ec]"></div>
-                  <span className="absolute bg-white px-3 text-[10px] font-bold text-[#767680] uppercase tracking-wider">
-                    Atau Masuk Cepat
-                  </span>
-                </div>
-
-                {/* Quick Demo User Presets */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => loginAsDemoUser('owner')}
-                    className="flex items-center gap-2.5 p-3 rounded-2xl border border-[#e2e1ec] bg-[#fcf8ff] hover:bg-[#ebeaff] hover:border-[#4648d4] transition-all text-left group"
-                  >
-                    <img
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_UeVtMqix0sJCZHs2TtKM5-d72Pea84EAktZj50a8963OhMvLReqs1NHQ5_GHU31yQIOvnrJgSfVJ_GeiKlPatJEFijCOybVvFFiMGK5NOxgk9QrAVW_iXOt0iW_JoPaZYQPCnyP7yXiRGmSsKfKm7wGSICkKlm5wlq8E4GuzgUAsgAUa1swPQ-m8CDYgnJ9jjXFUt_9CTSEQH_yEVGaOFNO6eA39ylX7lz2CTC7oAh5YPsc0Mc"
-                      alt="Budi Santoso"
-                      className="h-9 w-9 rounded-full object-cover ring-2 ring-white shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="overflow-hidden">
-                      <p className="text-xs font-bold text-[#1b1b23] group-hover:text-[#4648d4]">
-                        Budi Santoso
-                      </p>
-                      <p className="text-[10px] text-[#767680] truncate">Owner Toko</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => loginAsDemoUser('cashier')}
-                    className="flex items-center gap-2.5 p-3 rounded-2xl border border-[#e2e1ec] bg-[#fcf8ff] hover:bg-[#ebeaff] hover:border-[#4648d4] transition-all text-left group"
-                  >
-                    <img
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuCoLtV3Bv2OBXPlq_WrGjzOKb2hx7Pr3DOTjypa8dkEKduOjjWvN91FeXpeuVJDGRacnpFhqLouF2glsjyg154-ONwKg9-AXq2ylnHCQIAwb0pQ9662t3tt1reJkfrz46PuKvm9rTpygmqRrJUs0iC2FvO13DZ8nlMx-0eSm-8yba6zLFIndlcCVnmVfynCOWQHJRodfFxaOXcZ1AmWZ9mFAugAFABkMmuQ6rlyglKy280HkFHaQKc"
-                      alt="Siti Aisyah"
-                      className="h-9 w-9 rounded-full object-cover ring-2 ring-white shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="overflow-hidden">
-                      <p className="text-xs font-bold text-[#1b1b23] group-hover:text-[#4648d4]">
-                        Siti Aisyah
-                      </p>
-                      <p className="text-[10px] text-[#767680] truncate">Kasir POS</p>
-                    </div>
-                  </button>
-                </div>
               </form>
             )}
           </div>

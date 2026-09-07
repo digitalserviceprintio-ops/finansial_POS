@@ -70,6 +70,34 @@ export interface BackupData {
   };
 }
 
+export interface AutoBackupSchedule {
+  enabled: boolean;
+  frequency: 'daily' | 'weekly';
+  backupTime: string; // "HH:mm" e.g. "21:00"
+  backupDayOfWeek: number; // 0 = Minggu, 1 = Senin, ...
+  target: 'google_drive' | 'cloud_storage' | 'both';
+  lastRunTimestamp: number | null;
+  lastStatus: 'success' | 'failed' | null;
+  lastMessage: string | null;
+}
+
+export interface AutoBackupLog {
+  id: string;
+  timestamp: number;
+  filename: string;
+  sizeFormatted: string;
+  target: 'google_drive' | 'cloud_storage' | 'both';
+  status: 'success' | 'failed';
+  driveFileId?: string;
+  driveViewLink?: string;
+  itemCount: {
+    transactions: number;
+    expenses: number;
+    products: number;
+  };
+  notes?: string;
+}
+
 export interface CategoryItem {
   id: string;
   name: string;

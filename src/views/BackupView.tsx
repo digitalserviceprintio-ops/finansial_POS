@@ -20,9 +20,11 @@ import {
   Eye,
   Trash2,
   HelpCircle,
+  Cloud,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { BackupData } from '../types';
+import { ScheduledBackupCard } from '../components/ScheduledBackupCard';
 
 export const BackupView: React.FC = () => {
   const {
@@ -38,6 +40,7 @@ export const BackupView: React.FC = () => {
     showToast,
   } = useApp();
 
+  const [activeSubTab, setActiveSubTab] = useState<'auto' | 'manual'>('auto');
   const [copied, setCopied] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsedBackup, setParsedBackup] = useState<BackupData | null>(null);
@@ -307,8 +310,52 @@ export const BackupView: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Grid: Backup Export & Restore Import */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Subtab Navigation Pills */}
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-[#f0effb] border border-[#e2e1ec] max-w-lg">
+        <button
+          id="tab-auto-backup"
+          type="button"
+          onClick={() => setActiveSubTab('auto')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === 'auto'
+              ? 'bg-white text-[#4648d4] shadow-xs'
+              : 'text-[#767680] hover:text-[#1b1b23]'
+          }`}
+        >
+          <Cloud className="h-4 w-4" />
+          <span>Jadwal Otomatis & Cloud</span>
+          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#ebeaff] text-[#4648d4]">
+            Auto
+          </span>
+        </button>
+
+        <button
+          id="tab-manual-backup"
+          type="button"
+          onClick={() => setActiveSubTab('manual')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === 'manual'
+              ? 'bg-white text-[#4648d4] shadow-xs'
+              : 'text-[#767680] hover:text-[#1b1b23]'
+          }`}
+        >
+          <HardDrive className="h-4 w-4" />
+          <span>Ekspor & Pulihkan JSON</span>
+        </button>
+      </div>
+
+      {/* SUBTAB 1: JADWAL OTOMATIS & GOOGLE DRIVE */}
+      {activeSubTab === 'auto' && (
+        <div className="animate-in fade-in duration-150">
+          <ScheduledBackupCard />
+        </div>
+      )}
+
+      {/* SUBTAB 2: EKSPOR & PEMULIHAN MANUAL (JSON) */}
+      {activeSubTab === 'manual' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          {/* Main Grid: Backup Export & Restore Import */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ========================================================= */}
         {/* CARD 1: EKSPOR & UNDUH CADANGAN */}
         {/* ========================================================= */}
@@ -484,6 +531,8 @@ export const BackupView: React.FC = () => {
           </div>
         </div>
       </div>
+      </div>
+      )}
 
       {/* ========================================================= */}
       {/* RESTORE CONFIRMATION MODAL */}

@@ -10,5 +10,10 @@ service cloud.firestore {
     match /registered_users/{userId} {
       allow read, write: if true;
     }
+
+    // Scheduled cloud backup snapshots
+    match /scheduled_backups/{backupId} {
+      allow read, write: if true;
+    }
   }
 }

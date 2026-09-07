@@ -19,6 +19,8 @@ import {
   CustomerOrderStatus,
   GoogleSheetsConfig,
   GoogleSheetsSyncLog,
+  AutoBackupSchedule,
+  AutoBackupLog,
 } from '../types';
 import {
   initialProducts,
@@ -41,6 +43,12 @@ import {
   subscribeToUserSession,
 } from '../utils/firebase';
 import { getCurrentDeviceInfo, getDeviceId, CurrentDeviceInfo } from '../utils/deviceInfo';
+import {
+  uploadBackupToGoogleDrive,
+  uploadBackupToCloudStorage,
+  isScheduleDue,
+  formatBytes,
+} from '../utils/googleDriveBackup';
 
 interface ToastNotification {
   id: string;
@@ -211,6 +219,15 @@ interface AppContextType {
   syncAllToGoogleSheets: () => Promise<{ success: boolean; message: string }>;
   testGoogleSheetsConnection: () => Promise<{ success: boolean; message: string }>;
   clearGoogleSheetsLogs: () => void;
+
+  // Automated Financial Backup Scheduling & Google Drive / Cloud
+  autoBackupSchedule: AutoBackupSchedule;
+  updateAutoBackupSchedule: (schedule: Partial<AutoBackupSchedule>) => void;
+  autoBackupLogs: AutoBackupLog[];
+  runAutoBackupNow: () => Promise<{ success: boolean; message: string; driveLink?: string }>;
+  deleteAutoBackupLog: (id: string) => void;
+  clearAutoBackupLogs: () => void;
+  isAutoBackupRunning: boolean;
 
   // PWA & Android APK Installation
   isPwaInstallModalOpen: boolean;
@@ -407,6 +424,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     SecureVault.setTenantItem(currentTenantId, 'notifications', notifications);
   }, [currentTenantId, notifications]);
+
+  // Automated Financial Backup Scheduling (Google Drive & Cloud Firestore)
+  const [autoBackupSchedule, setAutoBackupSchedule] = useState<AutoBackupSchedule>(() => {
+    return SecureVault.getTenantItem<AutoBackupSchedule>(currentTenantId, 'auto_backup_schedule', {
+      enabled: true,
+      frequency: 'daily',
+      backupTime: '21:00',
+      backupDayOfWeek: 0,
+      target: 'both',
+      lastRunTimestamp: null,
+      lastStatus: null,
+      lastMessage: null,
+    });
+  });
+
+  const [autoBackupLogs, setAutoBackupLogs] = useState<AutoBackupLog[]>(() => {
+    return SecureVault.getTenantItem<AutoBackupLog[]>(currentTenantId, 'auto_backup_logs', []);
+  });
+
+  const [isAutoBackupRunning, setIsAutoBackupRunning] = useState(false);
+
+  useEffect(() => {
+    SecureVault.setTenantItem(currentTenantId, 'auto_backup_schedule', autoBackupSchedule);
+  }, [currentTenantId, autoBackupSchedule]);
+
+  useEffect(() => {
+    SecureVault.setTenantItem(currentTenantId, 'auto_backup_logs', autoBackupLogs);
+  }, [currentTenantId, autoBackupLogs]);
 
   // Automatic Low-Stock & Out-of-Stock Notification Engine
   useEffect(() => {
@@ -1766,6 +1811,139 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // =========================================================
+  // AUTOMATED FINANCIAL BACKUP SCHEDULING (GOOGLE DRIVE & CLOUD)
+  // =========================================================
+  const runAutoBackupNow = async (): Promise<{ success: boolean; message: string; driveLink?: string }> => {
+    setIsAutoBackupRunning(true);
+    try {
+      const backupData = exportBackupJson();
+      const cleanStoreName = (storeProfile.name || 'Toko').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const now = new Date();
+      const timestampStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const filename = `DelPOS_Backup_${cleanStoreName}_${timestampStr}.json`;
+
+      let driveSuccess = false;
+      let driveLink: string | undefined = undefined;
+      let driveFileId: string | undefined = undefined;
+      let cloudSuccess = false;
+      const errors: string[] = [];
+
+      // 1. Target: Google Drive
+      if (autoBackupSchedule.target === 'google_drive' || autoBackupSchedule.target === 'both') {
+        const driveRes = await uploadBackupToGoogleDrive(backupData, filename);
+        if (driveRes.success) {
+          driveSuccess = true;
+          driveLink = driveRes.webViewLink;
+          driveFileId = driveRes.fileId;
+        } else {
+          errors.push(`Google Drive: ${driveRes.error || 'Gagal unggah'}`);
+        }
+      }
+
+      // 2. Target: Cloud Storage (Firestore Secure Collection)
+      if (autoBackupSchedule.target === 'cloud_storage' || autoBackupSchedule.target === 'both') {
+        const cloudRes = await uploadBackupToCloudStorage(currentTenantId, backupData);
+        if (cloudRes.success) {
+          cloudSuccess = true;
+        } else {
+          errors.push(`Cloud: ${cloudRes.error || 'Gagal simpan'}`);
+        }
+      }
+
+      const isSuccessful =
+        autoBackupSchedule.target === 'google_drive'
+          ? driveSuccess
+          : autoBackupSchedule.target === 'cloud_storage'
+          ? cloudSuccess
+          : driveSuccess || cloudSuccess;
+
+      const summaryMsg = isSuccessful
+        ? `Cadangan berhasil disimpan (${driveSuccess ? 'Google Drive' : ''}${driveSuccess && cloudSuccess ? ' & ' : ''}${cloudSuccess ? 'Cloud Firestore' : ''})`
+        : `Gagal mencadangkan: ${errors.join(', ')}`;
+
+      const jsonStr = JSON.stringify(backupData);
+      const sizeFormatted = formatBytes(new Blob([jsonStr]).size);
+      const newLog: AutoBackupLog = {
+        id: `BACKUP-${Date.now()}`,
+        timestamp: Date.now(),
+        filename,
+        sizeFormatted,
+        target: autoBackupSchedule.target,
+        status: isSuccessful ? 'success' : 'failed',
+        driveFileId,
+        driveViewLink: driveLink,
+        itemCount: {
+          transactions: backupData.summary.totalTransactions,
+          expenses: backupData.summary.totalExpenses,
+          products: backupData.summary.totalProducts,
+        },
+        notes: summaryMsg,
+      };
+
+      setAutoBackupLogs((prev) => [newLog, ...prev.slice(0, 29)]);
+      setAutoBackupSchedule((prev) => ({
+        ...prev,
+        lastRunTimestamp: Date.now(),
+        lastStatus: isSuccessful ? 'success' : 'failed',
+        lastMessage: summaryMsg,
+      }));
+
+      if (isSuccessful) {
+        showToast(`✅ ${summaryMsg}`, 'success');
+        addCustomNotification({
+          type: 'system',
+          title: 'Cadangan Keuangan Otomatis Berhasil',
+          message: `Salinan data keuangan "${filename}" (${sizeFormatted}) berhasil disimpan ke ${driveSuccess ? 'Google Drive' : ''}${driveSuccess && cloudSuccess ? ' & ' : ''}${cloudSuccess ? 'Cloud Storage' : ''}.`,
+          actionTab: 'backup',
+          urgency: 'info',
+        });
+        return { success: true, message: summaryMsg, driveLink };
+      } else {
+        showToast(`❌ ${summaryMsg}`, 'error');
+        return { success: false, message: summaryMsg };
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Terjadi kesalahan sistem saat pencadangan otomatis.';
+      showToast(`❌ ${msg}`, 'error');
+      return { success: false, message: msg };
+    } finally {
+      setIsAutoBackupRunning(false);
+    }
+  };
+
+  const updateAutoBackupSchedule = (updated: Partial<AutoBackupSchedule>) => {
+    setAutoBackupSchedule((prev) => ({ ...prev, ...updated }));
+    showToast('Jadwal pencadangan otomatis disimpan', 'success');
+  };
+
+  const deleteAutoBackupLog = (id: string) => {
+    setAutoBackupLogs((prev) => prev.filter((l) => l.id !== id));
+    showToast('Catatan riwayat cadangan dihapus', 'info');
+  };
+
+  const clearAutoBackupLogs = () => {
+    setAutoBackupLogs([]);
+    showToast('Semua riwayat cadangan telah dibersihkan', 'info');
+  };
+
+  // Background Auto-Backup Scheduler Check (runs every minute while app is open)
+  useEffect(() => {
+    if (!autoBackupSchedule.enabled) return;
+
+    const checkSchedule = () => {
+      if (isAutoBackupRunning) return;
+      if (isScheduleDue(autoBackupSchedule)) {
+        console.log('[DelPOS] Scheduled auto-backup is due. Triggering automatic backup...');
+        runAutoBackupNow();
+      }
+    };
+
+    checkSchedule();
+    const intervalId = setInterval(checkSchedule, 60000);
+    return () => clearInterval(intervalId);
+  }, [autoBackupSchedule, isAutoBackupRunning]);
+
   return (
     <AppContext.Provider
       value={{
@@ -1866,6 +2044,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         syncAllToGoogleSheets,
         testGoogleSheetsConnection,
         clearGoogleSheetsLogs,
+        autoBackupSchedule,
+        updateAutoBackupSchedule,
+        autoBackupLogs,
+        runAutoBackupNow,
+        deleteAutoBackupLog,
+        clearAutoBackupLogs,
+        isAutoBackupRunning,
         isPwaInstallModalOpen,
         setIsPwaInstallModalOpen,
         isAppLocked,

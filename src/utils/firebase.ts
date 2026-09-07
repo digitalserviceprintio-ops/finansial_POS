@@ -23,6 +23,7 @@ setLogLevel('silent');
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Configure Firestore with forced long polling for reliable connection in iframes and reverse proxies
+const dbId = (firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId;
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(
@@ -30,10 +31,10 @@ try {
     {
       experimentalForceLongPolling: true,
     },
-    firebaseConfig.firestoreDatabaseId
+    dbId
   );
 } catch {
-  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  firestoreInstance = getFirestore(app, dbId);
 }
 
 export const db = firestoreInstance;

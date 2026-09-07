@@ -87,8 +87,7 @@ export const ReceiptModal: React.FC = () => {
         trx.change || 0
       )}`;
     } else if (trx.paymentMethod === 'QRIS') {
-      const danaNum = storeProfile.qrisDanaNumber || '082186371356';
-      paymentDetails = `\nQRIS DANA No  : ${danaNum}\nStatus Bayar  : LUNAS OTOMATIS (ASPI/BI)`;
+      paymentDetails = `\nStatus Bayar  : LUNAS (QRIS/ASPI)`;
     }
 
     return `${storeProfile.branch ? storeProfile.branch.toUpperCase() : storeProfile.name.toUpperCase()}
@@ -106,7 +105,7 @@ ${subDivider}
 Subtotal  : ${formatCurrency(trx.subtotal)}
 Pajak(${Math.round((storeProfile.taxRate || 0.1) * 100)}%): ${formatCurrency(trx.tax)}
 TOTAL     : ${formatCurrency(trx.total)}
-Metode    : ${trx.paymentMethod === 'QRIS' ? 'QRIS DANA (E-Wallet)' : trx.paymentMethod}${paymentDetails}
+Metode    : ${trx.paymentMethod === 'QRIS' ? 'QRIS (E-Wallet)' : trx.paymentMethod}${paymentDetails}
 ${divider}
 Terima Kasih Atas Kunjungan Anda!
 DelPOS • powered by AkuPos system`;

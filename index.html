@@ -34,28 +34,30 @@
             typeof msg === 'string' &&
             (msg.indexOf('[vite]') !== -1 ||
              msg.indexOf('Could not reach Cloud Firestore backend') !== -1 ||
-             msg.indexOf('@firebase/firestore') !== -1)
+             msg.indexOf('@firebase/firestore') !== -1 ||
+             msg.indexOf('auth/popup-closed-by-user') !== -1 ||
+             msg.indexOf('auth/cancelled-popup-request') !== -1)
           ) {
             return;
           }
           originalError.apply(console, arguments);
         };
 
-        var isWsError = function(err) {
+        var isBenignError = function(err) {
           if (!err) return false;
-          var msg = typeof err === 'string' ? err : (err.message || err.reason || '');
-          return /websocket|vite|ws/i.test(msg);
+          var msg = typeof err === 'string' ? err : (err.message || err.reason || err.code || '');
+          return /websocket|vite|ws|popup-closed-by-user|cancelled-popup-request/i.test(msg);
         };
 
         window.addEventListener('unhandledrejection', function(event) {
-          if (isWsError(event.reason)) {
+          if (isBenignError(event.reason)) {
             event.preventDefault();
             event.stopImmediatePropagation();
           }
         }, true);
 
         window.addEventListener('error', function(event) {
-          if (isWsError(event.message) || isWsError(event.error)) {
+          if (isBenignError(event.message) || isBenignError(event.error)) {
             event.preventDefault();
             event.stopImmediatePropagation();
           }
