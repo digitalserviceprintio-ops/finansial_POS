@@ -33,6 +33,7 @@ import {
   Volume2,
   WifiOff,
   Cloud,
+  LogOut,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -57,6 +58,8 @@ export const SettingsView: React.FC = () => {
     lockDurationMinutes,
     setLockDurationMinutes,
     lockAppNow,
+    currentUser,
+    logoutUser,
   } = useApp();
 
   const [formData, setFormData] = useState({
@@ -881,6 +884,42 @@ export const SettingsView: React.FC = () => {
                 Saat layar terkunci, kasir atau admin harus memasukkan <strong>Password Akun</strong> atau <strong>PIN Kasir (Bawaan: 123456)</strong> untuk melanjutkan transaksi POS.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Sesi Pengguna & Keluar Akun (Logout) */}
+        <div className="bg-white p-6 rounded-3xl border border-red-200/80 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-[#ba1a1a] border border-red-100 shrink-0">
+                <LogOut className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-extrabold text-[#1b1b23]">
+                    Sesi Akun Kasir & Keluar Sistem
+                  </h3>
+                  <span className="text-[10px] font-bold text-red-800 bg-red-100 px-2 py-0.5 rounded-full">
+                    {currentUser?.role === 'owner' ? 'Pemilik Toko' : 'Petugas Kasir'}
+                  </span>
+                </div>
+                <p className="text-xs text-[#767680] mt-0.5">
+                  Saat ini masuk sebagai <strong>{currentUser?.fullName || storeProfile.owner}</strong> ({currentUser?.email || storeProfile.branch}).
+                  Klik keluar untuk menutup sesi di perangkat ini.
+                </p>
+              </div>
+            </div>
+
+            <button
+              id="settings-logout-btn"
+              type="button"
+              onClick={() => logoutUser()}
+              className="flex items-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
+              title="Keluar dari akun aplikasi kasir"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              <span>Keluar Akun (Logout)</span>
+            </button>
           </div>
         </div>
 

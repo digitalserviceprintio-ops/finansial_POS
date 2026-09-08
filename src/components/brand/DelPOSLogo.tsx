@@ -215,14 +215,20 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
       <div className="flex flex-col justify-center leading-none">
         <div className={`font-black ${sizeConfig.textScale} tracking-tight flex items-center`}>
           <span className={isDark ? 'text-white' : 'text-[#0F172A]'}>Del</span>
-          <span className="bg-gradient-to-r from-[#0088FF] to-[#0055EE] bg-clip-text text-transparent">
+          <span
+            className={
+              isDark
+                ? 'text-[#38BDF8] drop-shadow-xs'
+                : 'bg-gradient-to-r from-[#0088FF] to-[#0055EE] bg-clip-text text-transparent'
+            }
+          >
             Pos
           </span>
         </div>
 
         <div
           className={`flex items-center gap-1 text-[10px] font-medium tracking-tight mt-0.5 ${
-            isDark ? 'text-slate-400' : 'text-[#64748B]'
+            isDark ? 'text-blue-100/90' : 'text-[#64748B]'
           }`}
         >
           <span>Smart POS & Finance</span>

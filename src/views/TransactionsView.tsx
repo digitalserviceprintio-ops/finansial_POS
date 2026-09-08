@@ -28,13 +28,16 @@ import {
   X,
   Smartphone,
   Share2,
+  BarChart3,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Transaction, PaymentMethod } from '../types';
+import { DetailedSalesReport } from '../components/transactions/DetailedSalesReport';
 
 export const TransactionsView: React.FC = () => {
   const {
     transactions,
+    products,
     setCurrentTab,
     formatCurrency,
     reprintReceipt,
@@ -44,11 +47,16 @@ export const TransactionsView: React.FC = () => {
     storeProfile,
   } = useApp();
 
+  // View Mode: List of receipts vs Detailed Sales Report
+  const [viewMode, setViewMode] = useState<'list' | 'detail_report'>('list');
+
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState<
-    'all' | 'today' | 'yesterday' | 'week' | 'month'
+    'all' | 'today' | 'yesterday' | 'week' | 'month' | 'this_month' | 'custom'
   >('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [selectedPayment, setSelectedPayment] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [sortBy, setSortBy] = useState<
@@ -60,6 +68,125 @@ export const TransactionsView: React.FC = () => {
     null
   );
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Date formatting helpers
+  const formatToLocalDateInput = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatIndonesianDateLabel = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+    if (!year || !month || !day) return dateStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${day} ${months[month - 1]} ${year}`;
+  };
+
+  const getTrxLocalDate = (trx: Transaction): string => {
+    if (trx.timestamp) {
+      const d = new Date(trx.timestamp);
+      if (!isNaN(d.getTime())) {
+        return formatToLocalDateInput(d);
+      }
+    }
+    if (trx.date && /^\d{4}-\d{2}-\d{2}$/.test(trx.date)) {
+      return trx.date;
+    }
+    return '';
+  };
+
+  // Preset Period Selection Handler
+  const handleSelectPeriodPreset = (
+    preset: 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'this_month'
+  ) => {
+    const today = new Date();
+    const todayStr = formatToLocalDateInput(today);
+
+    if (preset === 'all') {
+      setStartDate('');
+      setEndDate('');
+      setSelectedPeriod('all');
+    } else if (preset === 'today') {
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+      setSelectedPeriod('today');
+    } else if (preset === 'yesterday') {
+      const yest = new Date();
+      yest.setDate(yest.getDate() - 1);
+      const yestStr = formatToLocalDateInput(yest);
+      setStartDate(yestStr);
+      setEndDate(yestStr);
+      setSelectedPeriod('yesterday');
+    } else if (preset === 'week') {
+      const past7 = new Date();
+      past7.setDate(past7.getDate() - 6);
+      setStartDate(formatToLocalDateInput(past7));
+      setEndDate(todayStr);
+      setSelectedPeriod('week');
+    } else if (preset === 'this_month') {
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      setStartDate(formatToLocalDateInput(startOfMonth));
+      setEndDate(todayStr);
+      setSelectedPeriod('this_month');
+    } else if (preset === 'month') {
+      const past30 = new Date();
+      past30.setDate(past30.getDate() - 29);
+      setStartDate(formatToLocalDateInput(past30));
+      setEndDate(todayStr);
+      setSelectedPeriod('month');
+    }
+  };
+
+  const handleStartDateChange = (val: string) => {
+    setStartDate(val);
+    setSelectedPeriod('custom');
+  };
+
+  const handleEndDateChange = (val: string) => {
+    setEndDate(val);
+    setSelectedPeriod('custom');
+  };
+
+  const handleClearDateRange = () => {
+    setStartDate('');
+    setEndDate('');
+    setSelectedPeriod('all');
+  };
+
+  // Active Period Human Readable Label
+  const activePeriodLabel = useMemo(() => {
+    if (startDate && endDate) {
+      if (startDate === endDate) {
+        const todayStr = formatToLocalDateInput(new Date());
+        const yest = new Date();
+        yest.setDate(yest.getDate() - 1);
+        const yestStr = formatToLocalDateInput(yest);
+
+        if (startDate === todayStr) {
+          return `Hari Ini (${formatIndonesianDateLabel(startDate)})`;
+        }
+        if (startDate === yestStr) {
+          return `Kemarin (${formatIndonesianDateLabel(startDate)})`;
+        }
+        return formatIndonesianDateLabel(startDate);
+      }
+      return `${formatIndonesianDateLabel(startDate)} s/d ${formatIndonesianDateLabel(endDate)}`;
+    }
+    if (startDate) {
+      return `Mulai ${formatIndonesianDateLabel(startDate)}`;
+    }
+    if (endDate) {
+      return `Sampai ${formatIndonesianDateLabel(endDate)}`;
+    }
+    return 'Semua Waktu';
+  }, [startDate, endDate]);
 
   // Filtered & Sorted Transactions
   const filteredTransactions = useMemo(() => {
@@ -82,9 +209,30 @@ export const TransactionsView: React.FC = () => {
         const matchesStatus =
           selectedStatus === 'all' || trx.status === selectedStatus;
 
-        // Period Filter
+        // Period & Date Range Filter
         let matchesPeriod = true;
-        if (selectedPeriod !== 'all') {
+        const trxDate = getTrxLocalDate(trx);
+
+        if (startDate) {
+          if (trxDate) {
+            if (trxDate < startDate) matchesPeriod = false;
+          } else if (trx.timestamp) {
+            const startMs = new Date(`${startDate}T00:00:00`).getTime();
+            if (trx.timestamp < startMs) matchesPeriod = false;
+          }
+        }
+
+        if (matchesPeriod && endDate) {
+          if (trxDate) {
+            if (trxDate > endDate) matchesPeriod = false;
+          } else if (trx.timestamp) {
+            const endMs = new Date(`${endDate}T23:59:59.999`).getTime();
+            if (trx.timestamp > endMs) matchesPeriod = false;
+          }
+        }
+
+        // Fallback for period preset if dates not explicitly populated
+        if (!startDate && !endDate && selectedPeriod !== 'all') {
           const trxTime = trx.timestamp || 0;
           const now = Date.now();
           const oneDayMs = 24 * 60 * 60 * 1000;
@@ -114,14 +262,16 @@ export const TransactionsView: React.FC = () => {
     transactions,
     searchQuery,
     selectedPeriod,
+    startDate,
+    endDate,
     selectedPayment,
     selectedStatus,
     sortBy,
   ]);
 
-  // Statistics calculation
+  // Statistics calculation for the current filtered scope
   const stats = useMemo(() => {
-    const completedTrx = transactions.filter((t) => t.status === 'Selesai');
+    const completedTrx = filteredTransactions.filter((t) => t.status === 'Selesai');
     const totalRev = completedTrx.reduce((sum, t) => sum + t.total, 0);
     const count = completedTrx.length;
     const aov = count > 0 ? totalRev / count : 0;
@@ -148,7 +298,7 @@ export const TransactionsView: React.FC = () => {
       topMethod,
       topMethodCount: maxCount,
     };
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   // Handle Export CSV
   const handleExportCSV = () => {
@@ -272,14 +422,20 @@ Terima kasih atas kunjungan Anda!`;
   };
 
   const hasActiveFilters =
-    searchQuery ||
-    selectedPeriod !== 'all' ||
-    selectedPayment !== 'all' ||
-    selectedStatus !== 'all' ||
-    sortBy !== 'newest';
+    Boolean(
+      searchQuery ||
+      startDate ||
+      endDate ||
+      selectedPeriod !== 'all' ||
+      selectedPayment !== 'all' ||
+      selectedStatus !== 'all' ||
+      sortBy !== 'newest'
+    );
 
   const handleResetFilters = () => {
     setSearchQuery('');
+    setStartDate('');
+    setEndDate('');
     setSelectedPeriod('all');
     setSelectedPayment('all');
     setSelectedStatus('all');
@@ -300,23 +456,39 @@ Terima kasih atas kunjungan Anda!`;
             </span>
           </div>
           <p className="text-xs sm:text-sm text-[#767680] mt-0.5">
-            Daftar seluruh nota kasir, rincian produk yang terjual, dan cetak ulang struk (reprint).
+            Daftar seluruh nota kasir, laporan penjualan detail per produk & kasir, serta cetak struk ulang.
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {/* Toggle Button between List & Detailed Sales Report */}
           <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 rounded-xl border border-[#e2e1ec] bg-white px-3.5 py-2 text-xs font-bold text-[#1b1b23] hover:bg-[#f3f2fa] transition-all shadow-2xs"
-            title="Unduh Data Riwayat Format CSV"
+            onClick={() => setViewMode(viewMode === 'list' ? 'detail_report' : 'list')}
+            className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all shadow-2xs cursor-pointer ${
+              viewMode === 'detail_report'
+                ? 'bg-indigo-50 border border-indigo-200 text-[#4648d4] hover:bg-indigo-100'
+                : 'bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100'
+            }`}
+            title="Beralih ke Laporan Penjualan Detail"
           >
-            <Download className="h-3.5 w-3.5 text-[#767680]" />
-            <span>Ekspor CSV</span>
+            <BarChart3 className="h-3.5 w-3.5" />
+            <span>{viewMode === 'list' ? 'Laporan Penjualan Detail' : 'Kembali ke Daftar Nota'}</span>
           </button>
+
+          {viewMode === 'list' && (
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 rounded-xl border border-[#e2e1ec] bg-white px-3.5 py-2 text-xs font-bold text-[#1b1b23] hover:bg-[#f3f2fa] transition-all shadow-2xs cursor-pointer"
+              title="Unduh Data Riwayat Format CSV"
+            >
+              <Download className="h-3.5 w-3.5 text-[#767680]" />
+              <span>Ekspor CSV</span>
+            </button>
+          )}
 
           <button
             onClick={() => setCurrentTab('pos')}
-            className="flex items-center gap-1.5 rounded-xl bg-[#4648d4] px-4 py-2 text-xs font-bold text-white hover:bg-[#3435ad] transition-all shadow-sm active:scale-98"
+            className="flex items-center gap-1.5 rounded-xl bg-[#4648d4] px-4 py-2 text-xs font-bold text-white hover:bg-[#3435ad] transition-all shadow-sm active:scale-98 cursor-pointer"
           >
             <PlusCircle className="h-4 w-4" />
             <span>Transaksi Baru (Kasir)</span>
@@ -324,8 +496,91 @@ Terima kasih atas kunjungan Anda!`;
         </div>
       </div>
 
-      {/* KPI Cards Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* Sub-View Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#e2e1ec] pb-1 overflow-x-auto no-scrollbar">
+        <button
+          id="tab-transactions-list"
+          onClick={() => setViewMode('list')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-extrabold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+            viewMode === 'list'
+              ? 'bg-[#4648d4] text-white shadow-xs'
+              : 'bg-white text-[#767680] hover:text-[#1b1b23] hover:bg-[#f3f2fa] border border-[#e2e1ec]'
+          }`}
+        >
+          <Receipt className="h-4 w-4" />
+          <span>Daftar Nota Transaksi</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+              viewMode === 'list' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {filteredTransactions.length}
+          </span>
+        </button>
+
+        <button
+          id="tab-transactions-detail-report"
+          onClick={() => setViewMode('detail_report')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-extrabold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+            viewMode === 'detail_report'
+              ? 'bg-[#4648d4] text-white shadow-xs'
+              : 'bg-white text-[#767680] hover:text-[#1b1b23] hover:bg-[#f3f2fa] border border-[#e2e1ec]'
+          }`}
+        >
+          <BarChart3 className="h-4 w-4 text-emerald-500" />
+          <span>Laporan Penjualan Detail</span>
+          <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">
+            Detail & Cetak
+          </span>
+        </button>
+      </div>
+
+      {viewMode === 'detail_report' ? (
+        <DetailedSalesReport
+          transactions={filteredTransactions}
+          products={products}
+          storeProfile={storeProfile}
+          formatCurrency={formatCurrency}
+          selectedPeriod={selectedPeriod}
+          setSelectedPeriod={setSelectedPeriod}
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={handleStartDateChange}
+          onEndDateChange={handleEndDateChange}
+          onClearDateRange={handleClearDateRange}
+          onSelectPeriodPreset={handleSelectPeriodPreset}
+          activePeriodLabel={activePeriodLabel}
+          onBackToTransactions={() => setViewMode('list')}
+          showToast={showToast}
+        />
+      ) : (
+        <>
+          {/* Quick Banner to Detailed Report */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-purple-50/50 to-blue-50/80 border border-indigo-100 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#4648d4] text-white shadow-2xs shrink-0">
+                <BarChart3 className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="font-extrabold text-[#1b1b23]">
+                  Laporan Detail Transaksi Penjualan
+                </p>
+                <p className="text-[11px] text-[#767680]">
+                  Rangkuman omzet, estimasi laba kotor, rincian per produk, rekap kasir, dan cetak lembar laporan resmi.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setViewMode('detail_report')}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#4648d4] text-white font-bold text-xs hover:bg-[#3435ad] transition-all shadow-2xs cursor-pointer shrink-0"
+            >
+              <span>Buka Laporan Detail</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* KPI Cards Summary */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Card 1: Total Omset */}
         <div className="rounded-2xl border border-[#e2e1ec] bg-white p-4 shadow-xs space-y-1">
           <div className="flex items-center justify-between">
@@ -339,7 +594,9 @@ Terima kasih atas kunjungan Anda!`;
           <p className="text-lg sm:text-xl font-black text-[#1b1b23]">
             {formatCurrency(stats.totalRev)}
           </p>
-          <p className="text-[10px] text-[#767680]">Dari transaksi berstatus Selesai</p>
+          <p className="text-[10px] text-[#767680] truncate" title={activePeriodLabel}>
+            Periode: <strong className="text-[#4648d4] font-bold">{activePeriodLabel}</strong>
+          </p>
         </div>
 
         {/* Card 2: Total Transaksi Berhasil */}
@@ -396,11 +653,12 @@ Terima kasih atas kunjungan Anda!`;
 
       {/* Filter & Search Toolbar */}
       <div className="rounded-2xl border border-[#e2e1ec] bg-white p-4 shadow-xs space-y-3">
-        {/* Search row */}
-        <div className="flex flex-col md:flex-row gap-3">
+        {/* Search row & Quick Period Presets */}
+        <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
             <input
+              id="input-search-transactions"
               type="text"
               placeholder="Cari No. Nota (#ORD...), nama pelanggan, kasir, atau nama item barang..."
               value={searchQuery}
@@ -418,18 +676,20 @@ Terima kasih atas kunjungan Anda!`;
           </div>
 
           {/* Quick Period Buttons */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
             {[
               { id: 'all', label: 'Semua' },
               { id: 'today', label: 'Hari Ini' },
               { id: 'yesterday', label: 'Kemarin' },
               { id: 'week', label: '7 Hari' },
+              { id: 'this_month', label: 'Bulan Ini' },
               { id: 'month', label: '30 Hari' },
             ].map((p) => (
               <button
                 key={p.id}
-                onClick={() => setSelectedPeriod(p.id as any)}
-                className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition-all ${
+                id={`filter-period-${p.id}`}
+                onClick={() => handleSelectPeriodPreset(p.id as any)}
+                className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition-all cursor-pointer ${
                   selectedPeriod === p.id
                     ? 'bg-[#4648d4] text-white shadow-xs'
                     : 'bg-[#f3f2fa] text-[#46464f] hover:bg-[#e2e1ec]'
@@ -441,6 +701,83 @@ Terima kasih atas kunjungan Anda!`;
           </div>
         </div>
 
+        {/* Dedicated Date Range Filter Row (Rentang Tanggal Mulai & Akhir) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-[#fcf8ff] border border-[#e2e1ec]">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ebeaff] text-[#4648d4] shrink-0">
+              <Calendar className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-[#1b1b23]">
+                  Rentang Tanggal Penjualan:
+                </span>
+                {activePeriodLabel !== 'Semua Waktu' && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-[#4648d4]/10 text-[#4648d4] px-2 py-0.5 text-[10px] font-extrabold">
+                    <span>{activePeriodLabel}</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-[#767680]">
+                Pantau penjualan harian, mingguan, atau tentukan rentang tanggal mulai dan akhir secara kustom
+              </p>
+            </div>
+          </div>
+
+          {/* Date Input Pickers */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-white border border-[#e2e1ec] rounded-xl px-2.5 py-1.5 shadow-2xs">
+              <label
+                htmlFor="filter-start-date"
+                className="text-[11px] font-bold text-[#767680] whitespace-nowrap cursor-pointer"
+              >
+                Mulai:
+              </label>
+              <input
+                id="filter-start-date"
+                type="date"
+                value={startDate}
+                max={endDate || undefined}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                className="text-xs font-bold text-[#1b1b23] bg-transparent focus:outline-hidden cursor-pointer"
+                title="Pilih Tanggal Mulai"
+              />
+            </div>
+
+            <span className="text-[#767680] text-xs font-bold hidden sm:inline">-</span>
+
+            <div className="flex items-center gap-1.5 bg-white border border-[#e2e1ec] rounded-xl px-2.5 py-1.5 shadow-2xs">
+              <label
+                htmlFor="filter-end-date"
+                className="text-[11px] font-bold text-[#767680] whitespace-nowrap cursor-pointer"
+              >
+                Akhir:
+              </label>
+              <input
+                id="filter-end-date"
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+                className="text-xs font-bold text-[#1b1b23] bg-transparent focus:outline-hidden cursor-pointer"
+                title="Pilih Tanggal Akhir"
+              />
+            </div>
+
+            {(startDate || endDate) && (
+              <button
+                id="btn-clear-date-range"
+                onClick={handleClearDateRange}
+                className="flex items-center gap-1 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-100 transition-colors cursor-pointer"
+                title="Hapus Filter Rentang Tanggal"
+              >
+                <X className="h-3 w-3" />
+                <span>Hapus Tanggal</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Secondary Filter dropdowns */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-[#f3f2fa]">
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -448,6 +785,7 @@ Terima kasih atas kunjungan Anda!`;
             <div className="flex items-center gap-1.5 bg-[#fcf8ff] border border-[#e2e1ec] rounded-xl px-2.5 py-1.5">
               <span className="text-[11px] font-bold text-[#767680]">Bayar:</span>
               <select
+                id="filter-payment-method"
                 value={selectedPayment}
                 onChange={(e) => setSelectedPayment(e.target.value)}
                 className="bg-transparent font-bold text-[#1b1b23] focus:outline-hidden text-xs cursor-pointer"
@@ -464,6 +802,7 @@ Terima kasih atas kunjungan Anda!`;
             <div className="flex items-center gap-1.5 bg-[#fcf8ff] border border-[#e2e1ec] rounded-xl px-2.5 py-1.5">
               <span className="text-[11px] font-bold text-[#767680]">Status:</span>
               <select
+                id="filter-status"
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
                 className="bg-transparent font-bold text-[#1b1b23] focus:outline-hidden text-xs cursor-pointer"
@@ -479,6 +818,7 @@ Terima kasih atas kunjungan Anda!`;
             <div className="flex items-center gap-1.5 bg-[#fcf8ff] border border-[#e2e1ec] rounded-xl px-2.5 py-1.5">
               <ArrowUpDown className="h-3 w-3 text-[#767680]" />
               <select
+                id="sort-transactions"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="bg-transparent font-bold text-[#1b1b23] focus:outline-hidden text-xs cursor-pointer"
@@ -493,8 +833,9 @@ Terima kasih atas kunjungan Anda!`;
             {/* Reset filter button */}
             {hasActiveFilters && (
               <button
+                id="btn-reset-filters"
                 onClick={handleResetFilters}
-                className="flex items-center gap-1 text-[11px] font-bold text-red-600 hover:text-red-700 underline px-2 py-1"
+                className="flex items-center gap-1 text-[11px] font-bold text-red-600 hover:text-red-700 underline px-2 py-1 cursor-pointer"
               >
                 <RotateCcw className="h-3 w-3" />
                 <span>Reset Filter</span>
@@ -502,10 +843,17 @@ Terima kasih atas kunjungan Anda!`;
             )}
           </div>
 
-          <span className="text-xs font-bold text-[#767680]">
-            Menampilkan <strong>{filteredTransactions.length}</strong> dari{' '}
-            {transactions.length} transaksi
-          </span>
+          <div className="flex items-center gap-3 text-xs">
+            {stats.totalRev > 0 && (
+              <span className="rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold">
+                Omset Filter: {formatCurrency(stats.totalRev)}
+              </span>
+            )}
+            <span className="font-bold text-[#767680]">
+              Menampilkan <strong>{filteredTransactions.length}</strong> dari{' '}
+              {transactions.length} transaksi
+            </span>
+          </div>
         </div>
       </div>
 
@@ -795,6 +1143,8 @@ Terima kasih atas kunjungan Anda!`;
           </div>
         </>
       )}
+    </>
+  )}
 
       {/* DETAIL MODAL / TRANSACTION RECEIPT PREVIEW */}
       {detailTransaction && (

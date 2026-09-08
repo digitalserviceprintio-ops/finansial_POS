@@ -56,12 +56,14 @@ interface ToastNotification {
   message: string;
 }
 
-interface SimulatedEmail {
+export interface SimulatedEmail {
   to: string;
   subject: string;
   code: string;
   sentAt: string;
   previewText: string;
+  type?: 'verification' | 'reset_password';
+  resetLink?: string;
 }
 
 interface AppContextType {
@@ -90,6 +92,8 @@ interface AppContextType {
   ) => Promise<{ success: boolean; code: string }>;
   verifyEmailCode: (email: string, code: string) => { success: boolean; message: string };
   resendVerificationCode: (email: string) => string;
+  sendPasswordResetLink: (email: string) => Promise<{ success: boolean; message: string; resetLink?: string }>;
+  resetUserPassword: (email: string, token: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   loginWithCredentials: (
     email: string,
     passwordOrPin?: string,
@@ -274,7 +278,10 @@ const initialAuthUsers: AuthUser[] = [
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Navigation & UI States
-  const [currentTab, setCurrentTab] = useState<MainTab>('dashboard');
+  const [currentTab, setCurrentTab] = useState<MainTab>(() => {
+    const isExplicitlyLoggedOut = typeof window !== 'undefined' && localStorage.getItem('finansialpro_logged_out') === 'true';
+    return isExplicitlyLoggedOut ? 'login' : 'dashboard';
+  });
   const [reportSubTab, setReportSubTab] = useState<ReportSubTab>('cashflow');
   const [isMobileSimulation, setIsMobileSimulation] = useState<boolean>(false);
   const [searchGlobalQuery, setSearchGlobalQuery] = useState<string>('');
@@ -324,7 +331,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
-    const saved = localStorage.getItem('finansialpro_current_user');
+    const isExplicitlyLoggedOut = typeof window !== 'undefined' && localStorage.getItem('finansialpro_logged_out') === 'true';
+    if (isExplicitlyLoggedOut) {
+      return null;
+    }
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('finansialpro_current_user') : null;
     return saved ? JSON.parse(saved) : initialAuthUsers[0];
   });
 
@@ -621,6 +632,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           `⚠️ Akun Anda telah login di perangkat lain (${session.deviceName || 'Perangkat Baru'}). Sesi di perangkat ini dinonaktifkan otomatis.`,
           'warning'
         );
+        localStorage.setItem('finansialpro_logged_out', 'true');
+        localStorage.removeItem('finansialpro_current_user');
         setCurrentUser(null);
         setCurrentTab('login');
         setIsAppLocked(false);
@@ -818,6 +831,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setCashierName(newUser.fullName);
     setRegisteredUsers((prev) => [newUser, ...prev.filter((u) => u.email !== emailKey)]);
+    try {
+      localStorage.removeItem('finansialpro_logged_out');
+      localStorage.setItem('finansialpro_current_user', JSON.stringify(newUser));
+    } catch {
+      // ignore
+    }
     setCurrentUser(newUser);
     setCurrentTab('dashboard');
 
@@ -831,6 +850,146 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPendingVerifications(updatedPending);
 
     return { success: true, message: 'Verifikasi berhasil!' };
+  };
+
+  // Pending Password Resets
+  const [pendingPasswordResets, setPendingPasswordResets] = useState<
+    Record<string, { token: string; email: string; expiresAt: number }>
+  >(() => {
+    try {
+      const saved = localStorage.getItem('delpos_pending_password_resets');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('delpos_pending_password_resets', JSON.stringify(pendingPasswordResets));
+    } catch {
+      // ignore
+    }
+  }, [pendingPasswordResets]);
+
+  const sendPasswordResetLink = async (
+    email: string
+  ): Promise<{ success: boolean; message: string; resetLink?: string }> => {
+    const emailKey = email.toLowerCase().trim();
+    if (!emailKey) {
+      return { success: false, message: 'Harap masukkan alamat email terdaftar Anda.' };
+    }
+
+    // 1. Check in Firestore / local state
+    let targetUser: AuthUser | null = null;
+    try {
+      targetUser = await getUserFromFirestoreByEmail(emailKey);
+    } catch (err) {
+      console.warn('Firestore user fetch notice:', err);
+    }
+
+    if (!targetUser) {
+      targetUser = registeredUsers.find((u) => u.email.toLowerCase() === emailKey) || null;
+    }
+
+    if (!targetUser) {
+      return {
+        success: false,
+        message: `Email "${emailKey}" tidak terdaftar dalam sistem DelPOS. Periksa kembali penulisan email Anda.`,
+      };
+    }
+
+    // 2. Generate secure token & reset link
+    const token = `rst_${Math.random().toString(36).substring(2, 9)}${Date.now().toString(36)}`;
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 mins validity
+    const origin = window.location.origin + window.location.pathname;
+    const resetLink = `${origin}?action=reset_password&email=${encodeURIComponent(targetUser.email)}&token=${token}`;
+
+    setPendingPasswordResets((prev) => ({
+      ...prev,
+      [emailKey]: { token, email: emailKey, expiresAt },
+    }));
+
+    const now = new Date();
+    const simulated: SimulatedEmail = {
+      to: targetUser.email,
+      subject: `[DelPOS] Permintaan Perubahan Kata Sandi: ${targetUser.businessName || targetUser.fullName}`,
+      code: token.slice(-6).toUpperCase(),
+      sentAt: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} WIB`,
+      previewText: `Klik link perubahan kata sandi untuk akun DelPOS Anda.`,
+      type: 'reset_password',
+      resetLink,
+    };
+
+    setLatestSimulatedEmail(simulated);
+    setIsEmailModalOpen(true);
+    showToast(`📧 Link perubahan kata sandi telah dikirim ke ${targetUser.email}!`, 'info');
+
+    return {
+      success: true,
+      message: `Tautan perubahan kata sandi berhasil dikirim ke ${targetUser.email}.`,
+      resetLink,
+    };
+  };
+
+  const resetUserPassword = async (
+    email: string,
+    token: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const emailKey = email.toLowerCase().trim();
+    const pending = pendingPasswordResets[emailKey];
+
+    if (!pending || pending.token !== token) {
+      return {
+        success: false,
+        message: 'Token perubahan kata sandi tidak valid atau telah digunakan.',
+      };
+    }
+
+    if (Date.now() > pending.expiresAt) {
+      return {
+        success: false,
+        message: 'Tautan perubahan kata sandi telah kadaluarsa (berlaku 15 menit). Silakan ajukan ulang.',
+      };
+    }
+
+    if (!newPassword || newPassword.length < 4) {
+      return {
+        success: false,
+        message: 'Kata sandi baru minimal 4 karakter.',
+      };
+    }
+
+    // Update in registered users
+    let updatedTargetUser: AuthUser | null = null;
+    setRegisteredUsers((prev) => {
+      const updated = prev.map((u) => {
+        if (u.email.toLowerCase() === emailKey) {
+          updatedTargetUser = {
+            ...u,
+            password: newPassword,
+          };
+          return updatedTargetUser;
+        }
+        return u;
+      });
+      return updated;
+    });
+
+    if (updatedTargetUser) {
+      saveUserToFirestore(updatedTargetUser).catch((e) => console.warn('Failed saving updated password to Firestore:', e));
+    }
+
+    // Clear pending reset
+    setPendingPasswordResets((prev) => {
+      const copy = { ...prev };
+      delete copy[emailKey];
+      return copy;
+    });
+
+    showToast('🎉 Kata sandi berhasil diubah! Silakan masuk dengan kata sandi baru.', 'success');
+    return { success: true, message: 'Kata sandi berhasil diubah!' };
   };
 
   const loginWithCredentials = async (
@@ -924,6 +1083,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Update local state
     setRegisteredUsers((prev) => [updatedUser, ...prev.filter((u) => u.email.toLowerCase() !== emailKey)]);
+    try {
+      localStorage.removeItem('finansialpro_logged_out');
+      localStorage.setItem('finansialpro_current_user', JSON.stringify(updatedUser));
+    } catch {
+      // ignore
+    }
     setCurrentUser(updatedUser);
     setCashierName(updatedUser.fullName);
     setStoreProfile((prev) => ({
@@ -943,6 +1108,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginAsDemoUser = async (userType: 'owner' | 'cashier' | 'budi' | 'siti') => {
+    try {
+      localStorage.removeItem('finansialpro_logged_out');
+    } catch {
+      // ignore
+    }
     const target =
       userType === 'owner' || userType === 'budi'
         ? initialAuthUsers[0]
@@ -957,17 +1127,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logoutUser = async () => {
-    if (currentUser?.email) {
-      try {
-        await clearUserActiveSessionInFirestore(currentUser.email);
-      } catch (err) {
-        console.warn('Could not clear active session in Firestore on logout:', err);
-      }
+    const userEmail = currentUser?.email;
+
+    // 1. Immediately persist logged out state to localStorage so refreshes don't auto-login
+    try {
+      localStorage.setItem('finansialpro_logged_out', 'true');
+      localStorage.removeItem('finansialpro_current_user');
+    } catch {
+      // ignore
     }
+
+    // 2. Instantly update React state so UI immediately transitions to Login screen
     setCurrentUser(null);
     setIsAppLocked(false);
+    setIsSidebarOpen(false);
     setCurrentTab('login');
     showToast('Anda telah keluar dari akun. Sesi di perangkat ini telah ditutup.', 'info');
+
+    // 3. Clear cloud session in Firestore asynchronously in background without blocking or hanging UI
+    if (userEmail) {
+      clearUserActiveSessionInFirestore(userEmail).catch((err) => {
+        console.warn('Notice: Firestore active session clearing on logout:', err);
+      });
+    }
   };
 
   // Activity tracking and auto-lock after specified minutes (default 10 minutes)
@@ -1964,6 +2146,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sendVerificationEmail,
         verifyEmailCode,
         resendVerificationCode,
+        sendPasswordResetLink,
+        resetUserPassword,
         loginWithCredentials,
         loginAsDemoUser,
         logoutUser,

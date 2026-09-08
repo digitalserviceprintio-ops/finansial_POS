@@ -567,15 +567,18 @@ export const TopHeader: React.FC = () => {
                       </button>
                       <div className="border-t border-[#f3f2fa] my-1"></div>
                       <button
+                        id="topheader-logout-btn"
+                        type="button"
                         onClick={() => {
                           setShowProfileMenu(false);
                           logoutUser();
                         }}
-                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-[#ba1a1a] hover:bg-red-50 transition-colors"
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-[#ba1a1a] hover:bg-red-50 active:bg-red-100 transition-colors cursor-pointer"
+                        title="Keluar dari akun saat ini"
                       >
-                        <LogOut className="h-4 w-4" />
+                        <LogOut className="h-4 w-4 shrink-0" />
                         <div className="text-left">
-                          <span>Keluar Akun (Logout)</span>
+                          <span className="font-semibold">Keluar Akun (Logout)</span>
                           <span className="block text-[10px] text-[#ba1a1a]/70 font-normal">Lepas sesi untuk pindah perangkat</span>
                         </div>
                       </button>

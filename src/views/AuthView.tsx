@@ -6,6 +6,7 @@ import {
   Phone,
   Building,
   ArrowRight,
+  ArrowLeft,
   ShieldCheck,
   CheckCircle2,
   RefreshCw,
@@ -24,6 +25,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { DelPOSLogo } from '../components/brand/DelPOSLogo';
 import { DelPOSFeatureBadges } from '../components/brand/DelPOSFeatureBadges';
+import { AuthHeroIllustration } from '../components/auth/AuthHeroIllustration';
 
 export const AuthView: React.FC = () => {
   const {
@@ -33,15 +35,26 @@ export const AuthView: React.FC = () => {
     verifyEmailCode,
     resendVerificationCode,
     loginWithCredentials,
+    sendPasswordResetLink,
+    resetUserPassword,
     isEmailModalOpen,
     setIsEmailModalOpen,
     latestSimulatedEmail,
     showToast,
   } = useApp();
 
-  // Auth Mode: 'register' | 'verify' | 'login'
-  const [mode, setMode] = useState<'register' | 'verify' | 'login'>('register');
+  // Auth Mode: 'register' | 'verify' | 'login' | 'forgot_password' | 'reset_password'
+  const [mode, setMode] = useState<'register' | 'verify' | 'login' | 'forgot_password' | 'reset_password'>('login');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Forgot & Reset Password State
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [isSendingReset, setIsSendingReset] = useState(false);
+  const [resetSuccessMsg, setResetSuccessMsg] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newResetPassword, setNewResetPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
+  const [isSubmittingResetPass, setIsSubmittingResetPass] = useState(false);
 
   // Register Form Data
   const [regFullName, setRegFullName] = useState('');
@@ -70,6 +83,34 @@ export const AuthView: React.FC = () => {
   } | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Listen for reset password event from email simulation modal & URL params
+  useEffect(() => {
+    const handleOpenReset = (e: any) => {
+      if (e.detail?.email && e.detail?.token) {
+        setForgotEmail(e.detail.email);
+        setResetToken(e.detail.token);
+        setMode('reset_password');
+        setErrorMessage('');
+      }
+    };
+    window.addEventListener('delpos_open_reset_password', handleOpenReset);
+
+    // Check URL parameters
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const action = params.get('action');
+      const emailParam = params.get('email');
+      const tokenParam = params.get('token');
+      if (action === 'reset_password' && emailParam && tokenParam) {
+        setForgotEmail(emailParam);
+        setResetToken(tokenParam);
+        setMode('reset_password');
+      }
+    } catch {}
+
+    return () => window.removeEventListener('delpos_open_reset_password', handleOpenReset);
+  }, []);
 
   // Countdown timer for resending OTP
   useEffect(() => {
@@ -249,6 +290,67 @@ export const AuthView: React.FC = () => {
     }
   };
 
+  // Submit Forgot Password Link
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setResetSuccessMsg('');
+
+    if (!forgotEmail.trim()) {
+      setErrorMessage('Harap masukkan alamat email terdaftar Anda.');
+      return;
+    }
+
+    setIsSendingReset(true);
+    try {
+      const res = await sendPasswordResetLink(forgotEmail.trim());
+      if (res.success) {
+        setResetSuccessMsg(res.message);
+      } else {
+        setErrorMessage(res.message);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Gagal mengirim link perubahan kata sandi.');
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
+  // Submit New Password Reset
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    if (!newResetPassword || newResetPassword.length < 4) {
+      setErrorMessage('Kata sandi baru minimal 4 karakter.');
+      return;
+    }
+
+    if (newResetPassword !== confirmResetPassword) {
+      setErrorMessage('Konfirmasi kata sandi baru tidak cocok. Periksa kembali.');
+      return;
+    }
+
+    setIsSubmittingResetPass(true);
+    try {
+      const res = await resetUserPassword(forgotEmail.trim(), resetToken, newResetPassword);
+      if (res.success) {
+        setLoginEmail(forgotEmail.trim());
+        setLoginPassword(newResetPassword);
+        setMode('login');
+        setResetSuccessMsg('');
+        setNewResetPassword('');
+        setConfirmResetPassword('');
+      } else {
+        setErrorMessage(res.message);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Gagal mengubah kata sandi.');
+    } finally {
+      setIsSubmittingResetPass(false);
+    }
+  };
+
   // Force takeover if old device is broken/lost/inaccessible
   const handleForceOverride = async () => {
     await handleLoginSubmit(undefined, true);
@@ -257,19 +359,24 @@ export const AuthView: React.FC = () => {
   return (
     <div
       id="auth-gateway"
-      className="min-h-screen bg-gradient-to-br from-[#f0eff8] via-[#fcf8ff] to-[#e8e6f7] flex items-center justify-center p-4 sm:p-6"
+      className="min-h-screen bg-gradient-to-br from-[#f0f5ff] via-[#f7faff] to-[#eef4fe] flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden"
     >
-      <div className="w-full max-w-xl">
+      {/* Background Soft Wave Light Accents */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-200/40 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/2 -right-40 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 left-1/3 w-80 h-80 bg-sky-200/30 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-6xl mx-auto z-10 py-6">
         {/* Floating simulated email inbox banner if an email was sent */}
         {latestSimulatedEmail && (
-          <div className="mb-4 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 border border-[#4648d4]/30 shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top-4 duration-200">
+          <div className="mb-6 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 border border-[#0055EE]/30 shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top-4 duration-200">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 font-bold shrink-0">
                 <Inbox className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-xs font-bold text-[#1b1b23]">
-                  Email Verifikasi Terkirim ke <span className="text-[#4648d4]">{latestSimulatedEmail.to}</span>
+                  Email Verifikasi Terkirim ke <span className="text-[#0055EE]">{latestSimulatedEmail.to}</span>
                 </p>
                 <p className="text-[11px] text-[#767680]">
                   Kode OTP Anda: <strong className="font-mono text-emerald-800 font-extrabold text-xs">{latestSimulatedEmail.code}</strong>
@@ -278,7 +385,7 @@ export const AuthView: React.FC = () => {
             </div>
             <button
               onClick={() => setIsEmailModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-[#4648d4] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#3435ad] transition-all shrink-0"
+              className="flex items-center gap-1.5 rounded-xl bg-[#0055EE] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#0047cc] transition-all shrink-0 cursor-pointer"
             >
               <Mail className="h-3.5 w-3.5" />
               <span>Buka Kotak Masuk</span>
@@ -286,60 +393,69 @@ export const AuthView: React.FC = () => {
           </div>
         )}
 
-        {/* Top Feature Highlights Bar from Image */}
-        <div className="mb-4">
-          <DelPOSFeatureBadges layout="grid" />
-        </div>
-
-        {/* Main Auth Card Container */}
-        <div className="bg-white rounded-3xl border border-[#e2e1ec] shadow-2xl overflow-hidden">
-          {/* Header Banner */}
-          <div className="bg-gradient-to-r from-[#003B99] via-[#0055EE] to-[#0077FF] p-6 sm:p-7 text-white relative">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <DelPOSLogo variant="compact" size="lg" theme="dark" showPoweredBy={true} />
-              </div>
-
-              <div className="hidden sm:flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold text-white">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
-                <span>v1.2 Cloud Secured</span>
-              </div>
-            </div>
-
-            {/* Mode Switcher Tabs */}
-            {mode !== 'verify' && (
-              <div className="mt-6 flex rounded-2xl bg-black/20 p-1 backdrop-blur-xs">
-                <button
-                  id="tab-register-btn"
-                  onClick={() => {
-                    setMode('register');
-                    setErrorMessage('');
-                  }}
-                  className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition-all ${
-                    mode === 'register'
-                      ? 'bg-white text-[#4648d4] shadow-md'
-                      : 'text-white/80 hover:text-white'
-                  }`}
-                >
-                  Daftar Akun Baru
-                </button>
-                <button
-                  id="tab-login-btn"
-                  onClick={() => {
-                    setMode('login');
-                    setErrorMessage('');
-                  }}
-                  className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition-all ${
-                    mode === 'login'
-                      ? 'bg-white text-[#4648d4] shadow-md'
-                      : 'text-white/80 hover:text-white'
-                  }`}
-                >
-                  Masuk ke Akun
-                </button>
-              </div>
-            )}
+        {/* 2-Column Split Hero Layout matching user capture */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          {/* Left Column: Cashier Character Hero Illustration & Floating Badges */}
+          <div className="hidden lg:flex lg:col-span-6 items-center justify-center">
+            <AuthHeroIllustration />
           </div>
+
+          {/* Right Column: 4 Feature Cards + Main DelPos Login Card */}
+          <div className="lg:col-span-6 space-y-4 max-w-xl mx-auto lg:max-w-none w-full">
+            {/* Top 4 Feature Highlights Badges (KASIR, KEUANGAN, LAPORAN, AMAN) */}
+            <DelPOSFeatureBadges layout="grid" />
+
+            {/* Main Auth Card Container */}
+            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl overflow-hidden">
+              {/* Header Banner */}
+              <div className="bg-gradient-to-r from-[#0047cc] via-[#0055EE] to-[#0077FF] p-6 sm:p-7 text-white relative">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <DelPOSLogo variant="compact" size="lg" theme="dark" showPoweredBy={true} />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-xs border border-white/20 shadow-2xs">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
+                    <span>v1.2 Cloud Secured</span>
+                  </div>
+                </div>
+
+                {/* Mode Switcher Tabs */}
+                {mode !== 'verify' && (
+                  <div className="mt-6 flex rounded-2xl bg-black/25 p-1 backdrop-blur-xs">
+                    <button
+                      id="tab-register-btn"
+                      onClick={() => {
+                        setMode('register');
+                        setErrorMessage('');
+                        setResetSuccessMsg('');
+                      }}
+                      className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                        mode === 'register'
+                          ? 'bg-white text-[#0055EE] shadow-md font-extrabold'
+                          : 'text-white/90 hover:text-white'
+                      }`}
+                    >
+                      Daftar Akun Baru
+                    </button>
+                    <button
+                      id="tab-login-btn"
+                      onClick={() => {
+                        setMode('login');
+                        setErrorMessage('');
+                        setResetSuccessMsg('');
+                      }}
+                      className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                        mode === 'login' || mode === 'forgot_password' || mode === 'reset_password'
+                          ? 'bg-white text-[#0055EE] shadow-md font-extrabold'
+                          : 'text-white/90 hover:text-white'
+                      }`}
+                    >
+                      Masuk ke Akun
+                    </button>
+                  </div>
+                )}
+              </div>
 
           {/* Form Content Area */}
           <div className="p-6 sm:p-8 space-y-6">
@@ -672,15 +788,17 @@ export const AuthView: React.FC = () => {
             {mode === 'login' && (
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div className="space-y-1">
-                  <h2 className="text-base font-extrabold text-[#1b1b23]">Masuk ke Akun Toko</h2>
+                  <h2 className="text-base sm:text-lg font-black text-[#1b1b23]">Masuk ke Akun Toko</h2>
                   <p className="text-xs text-[#767680]">
-                    Gunakan email terdaftar atau pilih profil pengguna cepat di bawah.
+                    Masukkan email dan kata sandi Anda untuk mengakses akun toko.
                   </p>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3.5">
                   <div>
-                    <label className="block text-xs font-bold text-[#1b1b23] mb-1">Email Terdaftar</label>
+                    <label className="block text-xs font-bold text-[#1b1b23] mb-1.5">
+                      Email Terdaftar
+                    </label>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
                       <input
@@ -689,13 +807,29 @@ export const AuthView: React.FC = () => {
                         placeholder="nama@email.com"
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-2.5 pl-10 pr-3 text-xs text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none"
+                        className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-3 pl-10 pr-3 text-xs text-[#1b1b23] focus:border-[#0055EE] focus:bg-white focus:outline-none transition-all shadow-2xs"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#1b1b23] mb-1">Kata Sandi / PIN</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-[#1b1b23]">
+                        Kata Sandi / PIN
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForgotEmail(loginEmail || '');
+                          setMode('forgot_password');
+                          setErrorMessage('');
+                          setResetSuccessMsg('');
+                        }}
+                        className="text-xs font-bold text-[#0055EE] hover:text-[#003B99] hover:underline transition-colors cursor-pointer"
+                      >
+                        Lupa password?
+                      </button>
+                    </div>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
                       <input
@@ -703,12 +837,12 @@ export const AuthView: React.FC = () => {
                         placeholder="Masukkan kata sandi / PIN"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-2.5 pl-10 pr-10 text-xs text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none"
+                        className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-3 pl-10 pr-10 text-xs text-[#1b1b23] focus:border-[#0055EE] focus:bg-white focus:outline-none transition-all shadow-2xs"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#767680] hover:text-[#1b1b23]"
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#767680] hover:text-[#1b1b23] cursor-pointer"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -720,7 +854,7 @@ export const AuthView: React.FC = () => {
                   id="submit-login-btn"
                   type="submit"
                   disabled={isSubmittingLogin}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4648d4] py-3.5 text-xs font-bold text-white shadow-md hover:bg-[#3435ad] transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0055EE] hover:bg-[#0047cc] py-3.5 text-xs sm:text-sm font-extrabold text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmittingLogin ? (
                     <>
@@ -736,17 +870,223 @@ export const AuthView: React.FC = () => {
                 </button>
               </form>
             )}
+
+            {/* ========================================================= */}
+            {/* 4. FORGOT PASSWORD FORM (Kirim Link Perubahan Password) */}
+            {/* ========================================================= */}
+            {mode === 'forgot_password' && (
+              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('login');
+                        setErrorMessage('');
+                        setResetSuccessMsg('');
+                      }}
+                      className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                      title="Kembali ke Halaman Masuk"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </button>
+                    <h2 className="text-base sm:text-lg font-black text-[#1b1b23]">Lupa Kata Sandi</h2>
+                  </div>
+                  <p className="text-xs text-[#767680]">
+                    Masukkan email terdaftar Anda. Kami akan mengirimkan link perubahan password ke email tersebut.
+                  </p>
+                </div>
+
+                {resetSuccessMsg ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5 space-y-3.5">
+                    <div className="flex items-start gap-2.5 text-emerald-800 text-xs">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <span className="font-bold text-sm text-emerald-950 block">Link Berhasil Dikirim!</span>
+                        <p className="text-emerald-800 leading-relaxed">{resetSuccessMsg}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-emerald-200/80">
+                      <button
+                        type="button"
+                        onClick={() => setIsEmailModalOpen(true)}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-3.5 transition-colors cursor-pointer shadow-xs"
+                      >
+                        <Inbox className="h-4 w-4" />
+                        <span>Buka Simulasi Kotak Masuk Email</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode('login');
+                          setResetSuccessMsg('');
+                        }}
+                        className="rounded-xl border border-emerald-300 bg-white hover:bg-emerald-100 text-emerald-900 font-semibold text-xs py-2.5 px-3 transition-colors cursor-pointer text-center"
+                      >
+                        Kembali ke Masuk
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="block text-xs font-bold text-[#1b1b23] mb-1.5">
+                          Email Terdaftar
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
+                          <input
+                            type="email"
+                            required
+                            placeholder="nama@email.com"
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-3 pl-10 pr-3 text-xs text-[#1b1b23] focus:border-[#0055EE] focus:bg-white focus:outline-none transition-all shadow-2xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSendingReset}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0055EE] hover:bg-[#0047cc] py-3.5 text-xs sm:text-sm font-extrabold text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSendingReset ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>Mengirim Link Perubahan Password...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Kirim Link Perubahan Password</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
+                    </button>
+
+                    <div className="pt-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode('login');
+                          setErrorMessage('');
+                        }}
+                        className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                      >
+                        ← Batal & Kembali ke Masuk
+                      </button>
+                    </div>
+                  </>
+                )}
+              </form>
+            )}
+
+            {/* ========================================================= */}
+            {/* 5. RESET PASSWORD FORM (Buat Password Baru) */}
+            {/* ========================================================= */}
+            {mode === 'reset_password' && (
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                <div className="space-y-1">
+                  <h2 className="text-base sm:text-lg font-black text-[#1b1b23]">Buat Kata Sandi Baru</h2>
+                  <p className="text-xs text-[#767680]">
+                    Masukkan kata sandi baru untuk akun <strong className="text-[#1b1b23]">{forgotEmail}</strong>.
+                  </p>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1b1b23] mb-1.5">
+                      Kata Sandi Baru
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        minLength={4}
+                        placeholder="Minimal 4 karakter"
+                        value={newResetPassword}
+                        onChange={(e) => setNewResetPassword(e.target.value)}
+                        className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-3 pl-10 pr-10 text-xs text-[#1b1b23] focus:border-[#0055EE] focus:bg-white focus:outline-none transition-all shadow-2xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#767680] hover:text-[#1b1b23] cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1b1b23] mb-1.5">
+                      Konfirmasi Kata Sandi Baru
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        minLength={4}
+                        placeholder="Ulangi kata sandi baru"
+                        value={confirmResetPassword}
+                        onChange={(e) => setConfirmResetPassword(e.target.value)}
+                        className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-3 pl-10 pr-10 text-xs text-[#1b1b23] focus:border-[#0055EE] focus:bg-white focus:outline-none transition-all shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingResetPass}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0055EE] hover:bg-[#0047cc] py-3.5 text-xs sm:text-sm font-extrabold text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmittingResetPass ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>Menyimpan Kata Sandi Baru...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Simpan Kata Sandi Baru & Masuk</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('login');
+                      setErrorMessage('');
+                    }}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                  >
+                    ← Batal & Kembali ke Masuk
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
 
-        {/* Security & Support Guarantee */}
-        <div className="mt-6 text-center text-[11px] text-[#767680] space-y-1">
-          <p className="flex items-center justify-center gap-1.5 font-medium">
-            <ShieldCheck className="h-4 w-4 text-emerald-600" />
-            <span>Semua data keuangan terenkripsi & tersimpan secara lokal dan aman.</span>
+        {/* App Version & Copyright */}
+        <div className="mt-4 text-center text-xs text-[#767680]">
+          <p className="font-medium text-slate-500">
+            <span className="font-bold text-slate-700">DelPos v1.2</span>
+            <span className="mx-2 text-slate-300">•</span>
+            <span>© {new Date().getFullYear()} DelPos. Hak Cipta Dilindungi.</span>
           </p>
         </div>
       </div>
     </div>
+  </div>
+</div>
   );
 };
