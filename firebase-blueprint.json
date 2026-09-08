@@ -50,12 +50,40 @@
         }
       },
       "required": ["id", "fullName", "email"]
+    },
+    "ScheduledBackup": {
+      "title": "ScheduledBackup",
+      "description": "Cloud backup snapshot metadata and transaction records",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Backup ID"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of backup creation"
+        },
+        "backupType": {
+          "type": "string",
+          "description": "Type of backup"
+        },
+        "recordCount": {
+          "type": "number",
+          "description": "Number of records in backup"
+        }
+      },
+      "required": ["id", "createdAt"]
     }
   },
   "firestore": {
     "/registered_users/{userId}": {
       "schema": "RegisteredUser",
       "description": "Collection of registered users and their single active login device session"
+    },
+    "/scheduled_backups/{backupId}": {
+      "schema": "ScheduledBackup",
+      "description": "Cloud backup snapshots for POS transactions and catalog data"
     }
   }
 }
