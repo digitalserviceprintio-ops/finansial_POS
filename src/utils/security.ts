@@ -270,7 +270,7 @@ export const SecureVault = {
 
     const backupPkg: MasterBackupPackage = {
       version: '3.0.0-PRO-ENTERPRISE',
-      systemName: 'DelPOS - Multi-Tenant Master Fleet Backup (powered by AkuPos)',
+      systemName: 'DelPOS - Multi-Tenant Master Fleet Backup (powered by microdata2r)',
       createdAt: new Date().toISOString(),
       backupType: 'SUPER_ADMIN_MASS_FLEET_BACKUP',
       tenantCount: tenants.length,
@@ -366,3 +366,84 @@ export const SecureVault = {
     }
   },
 };
+
+// =========================================================
+// PASSWORD STRENGTH & COMPLIANCE VALIDATION
+// Mandatory combination: Uppercase, Lowercase, Number, Special Character
+// =========================================================
+export interface PasswordValidationResult {
+  isValid: boolean;
+  hasUppercase: boolean;
+  hasLowercase: boolean;
+  hasNumber: boolean;
+  hasSpecialChar: boolean;
+  hasMinLength: boolean;
+  score: number; // 0 to 5
+  strengthLabel: 'Sangat Lemah' | 'Lemah' | 'Sedang' | 'Kuat' | 'Sangat Kuat';
+  strengthColor: string; // Tailwind color class
+  message?: string;
+}
+
+export function validatePassword(password: string, minLength: number = 8): PasswordValidationResult {
+  const safePass = password || '';
+  const hasUppercase = /[A-Z]/.test(safePass);
+  const hasLowercase = /[a-z]/.test(safePass);
+  const hasNumber = /[0-9]/.test(safePass);
+  // Special characters: symbols such as !@#$%^&*()_+-=[]{};':"|,.<>/?~ etc.
+  const hasSpecialChar = /[^A-Za-z0-9]/.test(safePass);
+  const hasMinLength = safePass.length >= minLength;
+
+  let score = 0;
+  if (hasUppercase) score++;
+  if (hasLowercase) score++;
+  if (hasNumber) score++;
+  if (hasSpecialChar) score++;
+  if (hasMinLength) score++;
+
+  const isValid = hasUppercase && hasLowercase && hasNumber && hasSpecialChar && hasMinLength;
+
+  let strengthLabel: 'Sangat Lemah' | 'Lemah' | 'Sedang' | 'Kuat' | 'Sangat Kuat' = 'Sangat Lemah';
+  let strengthColor = 'bg-red-500';
+
+  if (score <= 1) {
+    strengthLabel = 'Sangat Lemah';
+    strengthColor = 'bg-red-500';
+  } else if (score === 2) {
+    strengthLabel = 'Lemah';
+    strengthColor = 'bg-amber-500';
+  } else if (score === 3) {
+    strengthLabel = 'Sedang';
+    strengthColor = 'bg-yellow-500';
+  } else if (score === 4) {
+    strengthLabel = 'Kuat';
+    strengthColor = 'bg-blue-500';
+  } else if (score === 5) {
+    strengthLabel = 'Sangat Kuat';
+    strengthColor = 'bg-emerald-500';
+  }
+
+  let message = '';
+  if (!isValid) {
+    const missing: string[] = [];
+    if (!hasUppercase) missing.push('huruf besar (A-Z)');
+    if (!hasLowercase) missing.push('huruf kecil (a-z)');
+    if (!hasNumber) missing.push('angka (0-9)');
+    if (!hasSpecialChar) missing.push('karakter khusus / simbol (@, #, $, dll)');
+    if (!hasMinLength) missing.push(`minimal ${minLength} karakter`);
+
+    message = `Kata sandi harus mengandung kombinasi: ${missing.join(', ')}.`;
+  }
+
+  return {
+    isValid,
+    hasUppercase,
+    hasLowercase,
+    hasNumber,
+    hasSpecialChar,
+    hasMinLength,
+    score,
+    strengthLabel,
+    strengthColor,
+    message,
+  };
+}

@@ -232,6 +232,11 @@ export const DelPOSLogo: React.FC<DelPOSLogoProps> = ({
           }`}
         >
           <span>Smart POS & Finance</span>
+          {showPoweredBy && (
+            <span className={isDark ? 'text-blue-200/90 font-semibold' : 'text-slate-500 font-semibold'}>
+              • powered by microdata2r
+            </span>
+          )}
         </div>
       </div>
     </div>

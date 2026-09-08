@@ -26,6 +26,8 @@ import { useApp } from '../context/AppContext';
 import { DelPOSLogo } from '../components/brand/DelPOSLogo';
 import { DelPOSFeatureBadges } from '../components/brand/DelPOSFeatureBadges';
 import { AuthHeroIllustration } from '../components/auth/AuthHeroIllustration';
+import { PasswordRequirementGuide } from '../components/auth/PasswordRequirementGuide';
+import { validatePassword } from '../utils/security';
 
 export const AuthView: React.FC = () => {
   const {
@@ -185,6 +187,13 @@ export const AuthView: React.FC = () => {
       return;
     }
 
+    // Validate mandatory password combination: uppercase, lowercase, number, and special character
+    const passCheck = validatePassword(regPassword, 8);
+    if (!passCheck.isValid) {
+      setErrorMessage(passCheck.message || 'Kata sandi harus mengandung kombinasi huruf besar, kecil, angka, dan karakter.');
+      return;
+    }
+
     try {
       const res = await sendVerificationEmail(
         regEmail.trim(),
@@ -321,8 +330,10 @@ export const AuthView: React.FC = () => {
     e.preventDefault();
     setErrorMessage('');
 
-    if (!newResetPassword || newResetPassword.length < 4) {
-      setErrorMessage('Kata sandi baru minimal 4 karakter.');
+    // Validate mandatory password combination: uppercase, lowercase, number, and special character
+    const passCheck = validatePassword(newResetPassword, 8);
+    if (!passCheck.isValid) {
+      setErrorMessage(passCheck.message || 'Kata sandi baru harus memiliki kombinasi huruf besar, kecil, angka, dan karakter khusus.');
       return;
     }
 
@@ -630,7 +641,8 @@ export const AuthView: React.FC = () => {
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        placeholder="Minimal 6 karakter"
+                        required
+                        placeholder="Contoh: Toko2026!#"
                         value={regPassword}
                         onChange={(e) => setRegPassword(e.target.value)}
                         className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-2.5 pl-10 pr-10 text-xs text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none"
@@ -643,6 +655,9 @@ export const AuthView: React.FC = () => {
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+
+                    {/* Live Password Criteria & Strength Guide */}
+                    <PasswordRequirementGuide password={regPassword} />
                   </div>
                 </div>
 
@@ -656,7 +671,7 @@ export const AuthView: React.FC = () => {
                     className="h-4 w-4 rounded text-[#4648d4] focus:ring-[#4648d4]"
                   />
                   <label htmlFor="terms-check" className="text-[11px] text-[#767680] cursor-pointer">
-                    Saya menyetujui Ketentuan Layanan & Kebijakan Data DelPOS (powered by AkuPos)
+                    Saya menyetujui Ketentuan Layanan & Kebijakan Data DelPOS (powered by microdata2r)
                   </label>
                 </div>
 
@@ -1006,8 +1021,7 @@ export const AuthView: React.FC = () => {
                       <input
                         type={showPassword ? 'text' : 'password'}
                         required
-                        minLength={4}
-                        placeholder="Minimal 4 karakter"
+                        placeholder="Contoh: Rahasia2026@!"
                         value={newResetPassword}
                         onChange={(e) => setNewResetPassword(e.target.value)}
                         className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-3 pl-10 pr-10 text-xs text-[#1b1b23] focus:border-[#0055EE] focus:bg-white focus:outline-none transition-all shadow-2xs"
@@ -1020,6 +1034,9 @@ export const AuthView: React.FC = () => {
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+
+                    {/* Live Password Criteria & Strength Guide for Reset */}
+                    <PasswordRequirementGuide password={newResetPassword} showAlways={true} />
                   </div>
 
                   <div>

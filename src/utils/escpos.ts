@@ -229,7 +229,7 @@ export function buildReceiptEscPos(
     .line('TERIMA KASIH ATAS KUNJUNGAN ANDA!')
     .bold(false)
     .line('Barang yang dibeli tidak dapat ditukar.')
-    .line('DelPOS (powered by AkuPos)')
+    .line('DelPOS (powered by microdata2r)')
     .feed(3)
     .cut();
 
@@ -376,7 +376,7 @@ export function buildQueueOrderTicketEscPos(
     .line('NOMOR ANDA AKAN DIPANGGIL')
     .bold(false)
     .line('Terima kasih telah berkunjung!')
-    .line('DelPOS • powered by AkuPos')
+    .line('DelPOS • powered by microdata2r')
     .feed(3)
     .cut();
 

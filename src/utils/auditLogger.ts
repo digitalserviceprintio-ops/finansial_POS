@@ -182,7 +182,7 @@ export const AuditLogger = {
     const logs = this.getLogs();
     const exportData = {
       exportedAt: new Date().toISOString(),
-      system: 'DelPOS Super Admin Audit Vault (powered by AkuPos)',
+      system: 'DelPOS Super Admin Audit Vault (powered by microdata2r)',
       totalRecords: logs.length,
       logs,
     };

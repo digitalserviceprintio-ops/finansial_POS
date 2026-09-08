@@ -31,7 +31,7 @@ import {
   initialCategories,
   initialCustomerOrders,
 } from '../data/mockData';
-import { SecureVault, generateTenantId } from '../utils/security';
+import { SecureVault, generateTenantId, validatePassword } from '../utils/security';
 import { LicenseManager } from '../utils/licenseManager';
 import { sendPayloadToGoogleAppsScript } from '../utils/googleAppsScript';
 import {
@@ -713,6 +713,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     phone: string,
     password?: string
   ): Promise<{ success: boolean; code: string }> => {
+    // Validate password combination if provided
+    if (password) {
+      const passCheck = validatePassword(password, 8);
+      if (!passCheck.isValid) {
+        throw new Error(passCheck.message || 'Kata sandi harus mengandung kombinasi huruf besar, kecil, angka, dan karakter.');
+      }
+    }
+
     const code = generateOtpCode();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 mins
 
@@ -727,6 +735,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: email.toLowerCase(),
           phone,
           role: 'owner' as const,
+          password: password || 'admin123',
         },
       },
     };
@@ -954,10 +963,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    if (!newPassword || newPassword.length < 4) {
+    const passCheck = validatePassword(newPassword, 8);
+    if (!passCheck.isValid) {
       return {
         success: false,
-        message: 'Kata sandi baru minimal 4 karakter.',
+        message: passCheck.message || 'Kata sandi baru harus memiliki kombinasi huruf besar, kecil, angka, dan karakter.',
       };
     }
 

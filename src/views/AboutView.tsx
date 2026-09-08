@@ -154,7 +154,7 @@ export const AboutView: React.FC = () => {
           <h4 className="font-bold text-[#1b1b23] text-sm">Keamanan & Privasi Data Terjamin</h4>
           <p className="text-[#46464f] mt-0.5 leading-relaxed">
             Data transaksi, daftar harga, dan pembukuan Anda terenkripsi aman secara lokal dan cloud.
-            Didukung oleh teknologi sistem <strong>AkuPos</strong> yang terpercaya dan andal untuk operasional bisnis UMKM.
+            Didukung oleh teknologi sistem <strong>microdata2r</strong> yang terpercaya dan andal untuk operasional bisnis UMKM.
           </p>
         </div>
       </div>

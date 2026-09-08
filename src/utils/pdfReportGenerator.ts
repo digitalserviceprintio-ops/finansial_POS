@@ -124,7 +124,7 @@ export function generateFinancialPdfReport(
   doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139);
   doc.text(`Dicetak: ${todayStr}`, pageWidth - margin, currentY + 5, { align: 'right' });
-  doc.text(`Sistem: DelPOS (powered by AkuPos)`, pageWidth - margin, currentY + 9, { align: 'right' });
+  doc.text(`Sistem: DelPOS (powered by microdata2r)`, pageWidth - margin, currentY + 9, { align: 'right' });
 
   currentY += 16;
   doc.setDrawColor(226, 232, 240);
@@ -422,7 +422,7 @@ export function generateFinancialPdfReport(
     doc.setFontSize(7.5);
     doc.setTextColor(148, 163, 184);
     doc.text(
-      `Dokumen Resmi DelPOS powered by AkuPos | Halaman ${i} dari ${totalPages} | Dokumen Rahasia Perusahaan`,
+      `Dokumen Resmi DelPOS powered by microdata2r | Halaman ${i} dari ${totalPages} | Dokumen Rahasia Perusahaan`,
       pageWidth / 2,
       pageHeight - 6,
       { align: 'center' }

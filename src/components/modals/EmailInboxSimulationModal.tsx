@@ -103,7 +103,7 @@ export const EmailInboxSimulationModal: React.FC = () => {
               </div>
               <div>
                 <span className="font-extrabold text-sm text-[#1b1b23]">DelPOS</span>
-                <p className="text-[10px] text-[#767680]">powered by AkuPos system</p>
+                <p className="text-[10px] text-[#767680]">powered by microdata2r system</p>
               </div>
             </div>
 
@@ -185,7 +185,7 @@ export const EmailInboxSimulationModal: React.FC = () => {
                     Halo Pemilik Usaha,
                   </h3>
                   <p className="text-xs text-[#46464f] leading-relaxed">
-                    Terima kasih telah mendaftar di DelPOS (powered by AkuPos). Gunakan kode verifikasi di bawah ini untuk mengonfirmasi email dan mengaktifkan akun sistem kasir & pembukuan Anda:
+                    Terima kasih telah mendaftar di DelPOS (powered by microdata2r). Gunakan kode verifikasi di bawah ini untuk mengonfirmasi email dan mengaktifkan akun sistem kasir & pembukuan Anda:
                   </p>
                 </div>
 
@@ -221,7 +221,7 @@ export const EmailInboxSimulationModal: React.FC = () => {
             <div className="space-y-1.5 text-[11px] text-[#767680] pt-2 border-t border-[#f3f2fa]">
               <div className="flex items-center gap-1.5 text-emerald-700">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                <span className="font-semibold">Email Resmi Terenkripsi DelPOS • powered by AkuPos</span>
+                <span className="font-semibold">Email Resmi Terenkripsi DelPOS • powered by microdata2r</span>
               </div>
               <p>Jika Anda tidak merasa melakukan pendaftaran ini, abaikan email ini secara aman.</p>
             </div>

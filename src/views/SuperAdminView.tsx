@@ -281,7 +281,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onExitSuperAdmin
 
     const msg = `*KONFIRMASI AKTIVASI SOFTWARE POS DELPOS* 🚀\n\n` +
       `Halo *${lic.clientName}* (${lic.businessName}),\n` +
-      `Terima kasih telah mempercayakan operasional kasir bisnis Anda kepada DelPOS (powered by AkuPos).\n\n` +
+      `Terima kasih telah mempercayakan operasional kasir bisnis Anda kepada DelPOS (powered by microdata2r).\n\n` +
       `Berikut adalah Kunci Serial Lisensi Resmi Anda:\n` +
       `🔑 *KUNCI SERIAL:* \`${lic.licenseKey}\`\n` +
       `📦 *Paket:* ${lic.tier} Edition\n` +

@@ -135,7 +135,7 @@ export const CustomerCatalogQRModal: React.FC<CustomerCatalogQRModalProps> = ({
           </div>
 
           <div class="footer">
-            DelPOS • powered by AkuPos system • Sistem Antrian & Katalog Otomatis
+            DelPOS • powered by microdata2r system • Sistem Antrian & Katalog Otomatis
           </div>
 
           <script>

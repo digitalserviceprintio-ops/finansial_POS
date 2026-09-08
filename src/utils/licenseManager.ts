@@ -259,7 +259,7 @@ export const LicenseManager = {
       maxProducts: 200,
       features: TIER_FEATURES.TRIAL,
       price: 0,
-      notes: 'Lisensi Uji Coba Gratis 14 Hari DelPOS (powered by AkuPos)',
+      notes: 'Lisensi Uji Coba Gratis 14 Hari DelPOS (powered by microdata2r)',
     };
 
     localStorage.setItem(`${ACTIVE_TENANT_LICENSE_KEY_PREFIX}${tenantId}`, JSON.stringify(trialLicense));

@@ -111,7 +111,7 @@ ${divider}
 *** SIMPAN STRUK INI ***
 Nomor Anda akan dipanggil saat pesanan siap.
 Terima kasih atas kunjungan Anda!
-DelPOS • powered by AkuPos system`;
+DelPOS • powered by microdata2r system`;
   };
 
   // Direct Bluetooth Thermal ESC/POS Print
@@ -345,7 +345,7 @@ DelPOS • powered by AkuPos system`;
               <div class="bold">*** SIMPAN STRUK INI ***</div>
               <div>Nomor Anda akan dipanggil saat pesanan siap.</div>
               <div>Terima kasih atas kunjungan Anda!</div>
-              <div style="margin-top: 4px; font-size: 8px; color: #555;">DelPOS Retail Thermal • powered by AkuPos</div>
+              <div style="margin-top: 4px; font-size: 8px; color: #555;">DelPOS Retail Thermal • powered by microdata2r</div>
             </div>
 
             <script>
@@ -625,7 +625,7 @@ DelPOS • powered by AkuPos system`;
                   <p>Nomor antrian akan dipanggil saat pesanan siap.</p>
                   <p>Terima kasih atas kunjungan Anda!</p>
                   <p className="text-[8px] text-gray-500 pt-1">
-                    DelPOS Retail Thermal • powered by AkuPos • {new Date().toLocaleTimeString('id-ID')}
+                    DelPOS Retail Thermal • powered by microdata2r • {new Date().toLocaleTimeString('id-ID')}
                   </p>
                 </div>
               </div>

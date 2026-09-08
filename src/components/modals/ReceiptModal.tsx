@@ -108,7 +108,7 @@ TOTAL     : ${formatCurrency(trx.total)}
 Metode    : ${trx.paymentMethod === 'QRIS' ? 'QRIS (E-Wallet)' : trx.paymentMethod}${paymentDetails}
 ${divider}
 Terima Kasih Atas Kunjungan Anda!
-DelPOS • powered by AkuPos system`;
+DelPOS • powered by microdata2r system`;
   };
 
   // Bluetooth Thermal ESC/POS Direct Print Handler
@@ -269,7 +269,7 @@ DelPOS • powered by AkuPos system`;
           <div class="text-center" style="font-size: 10px;">
             <div class="bold">TERIMA KASIH</div>
             <div>Struk resmi pembayaran POS</div>
-            <div style="font-size: 9px; margin-top: 4px; color: #555;">DelPOS • powered by AkuPos</div>
+            <div style="font-size: 9px; margin-top: 4px; color: #555;">DelPOS • powered by microdata2r</div>
           </div>
         </body>
         </html>
@@ -515,7 +515,7 @@ DelPOS • powered by AkuPos system`;
             <div className="text-center text-[10px] text-[#767680] space-y-1">
               <p className="font-bold uppercase">Terima Kasih Atas Kunjungan Anda!</p>
               <p>Struk ini sah sebagai bukti pembayaran resmi.</p>
-              <p className="font-mono text-[9px] pt-1">DelPOS • powered by AkuPos system</p>
+              <p className="font-mono text-[9px] pt-1">DelPOS • powered by microdata2r system</p>
             </div>
           </div>
 

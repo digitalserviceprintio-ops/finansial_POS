@@ -494,7 +494,7 @@ export const BackupView: React.FC = () => {
                   Klik untuk pilih file <span className="text-[#4648d4]">.JSON</span> atau drag & drop ke sini
                 </p>
                 <p className="text-[10px] text-[#767680] mt-0.5">
-                  Mendukung file cadangan resmi DelPOS & AkuPos
+                  Mendukung file cadangan resmi DelPOS & microdata2r
                 </p>
               </div>
             </div>
