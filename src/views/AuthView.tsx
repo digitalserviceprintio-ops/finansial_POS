@@ -20,8 +20,16 @@ import {
   HelpCircle,
   Smartphone,
   ChevronRight,
+  MessageCircle,
+  ExternalLink,
+  Send,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import {
+  cleanWhatsAppNumber,
+  formatDisplayPhone,
+  validateIndonesianPhoneNumber,
+} from '../utils/whatsappService';
 import { DelPOSLogo } from '../components/brand/DelPOSLogo';
 import { DelPOSFeatureBadges } from '../components/brand/DelPOSFeatureBadges';
 import { AuthHeroIllustration } from '../components/auth/AuthHeroIllustration';
@@ -32,6 +40,9 @@ export const AuthView: React.FC = () => {
   const {
     currentUser,
     isAuthenticated,
+    sendWhatsAppOtp,
+    resendWhatsAppOtp,
+    verifyOtpCode,
     sendVerificationEmail,
     verifyEmailCode,
     resendVerificationCode,
@@ -59,11 +70,19 @@ export const AuthView: React.FC = () => {
   const [regBusinessName, setRegBusinessName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
+  const [regPhoneTouched, setRegPhoneTouched] = useState(false);
   const [regPassword, setRegPassword] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(true);
 
-  // Verification State
+  // Computed phone regex validation
+  const regPhoneValidation = regPhone ? validateIndonesianPhoneNumber(regPhone) : null;
+
+  // Verification State (WhatsApp OTP)
+  const [verifPhone, setVerifPhone] = useState('');
   const [verifEmail, setVerifEmail] = useState('');
+  const [waLink, setWaLink] = useState('');
+  const [waDispatchedViaApi, setWaDispatchedViaApi] = useState(false);
+  const [waApiMessage, setWaApiMessage] = useState('');
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [resendTimer, setResendTimer] = useState(60);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -171,13 +190,24 @@ export const AuthView: React.FC = () => {
     }
   };
 
-  // Submit Registration Form
+  // Submit Registration Form - WhatsApp OTP
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
-    if (!regFullName.trim() || !regBusinessName.trim() || !regEmail.trim()) {
-      setErrorMessage('Harap lengkapi semua kolom pendaftaran.');
+    if (!regFullName.trim() || !regBusinessName.trim() || !regPhone.trim()) {
+      setErrorMessage('Harap lengkapi Nama Lengkap, Nama Usaha, dan Nomor WhatsApp Anda.');
+      return;
+    }
+
+    // Strict Regex Validation for Indonesian Phone / WhatsApp Number (must start with 08 or 62)
+    const phoneCheck = validateIndonesianPhoneNumber(regPhone);
+    if (!phoneCheck.isValid) {
+      setRegPhoneTouched(true);
+      setErrorMessage(
+        phoneCheck.message ||
+          'Nomor WhatsApp tidak valid. Format harus diawali dengan 08 atau 62 (contoh: 081234567890).'
+      );
       return;
     }
 
@@ -194,31 +224,27 @@ export const AuthView: React.FC = () => {
     }
 
     try {
-      const res = await sendVerificationEmail(
-        regEmail.trim(),
+      const res = await sendWhatsAppOtp(
+        regPhone.trim(),
         regFullName.trim(),
         regBusinessName.trim(),
-        regPhone.trim() || '081234567890',
+        regEmail.trim(),
         regPassword
       );
 
       if (res.success) {
+        setVerifPhone(res.phone);
         setVerifEmail(regEmail.trim());
         setCurrentOtpCode(res.code);
-        if (res.emailSent) {
-          setEmailDeliveryStatus('sent');
-        } else if (!res.configured) {
-          setEmailDeliveryStatus('unconfigured');
-        } else {
-          setEmailDeliveryStatus('failed');
-        }
-        setEmailDeliveryError(res.error || res.message || '');
+        setWaLink(res.waLink);
+        setWaDispatchedViaApi(res.dispatchedViaApi);
+        setWaApiMessage(res.apiMessage || '');
         setMode('verify');
         setResendTimer(60);
         setOtpDigits(['', '', '', '', '', '']);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Gagal mengirim kode verifikasi.');
+      setErrorMessage(err.message || 'Gagal mengirim kode verifikasi WhatsApp.');
     }
   };
 
@@ -234,33 +260,32 @@ export const AuthView: React.FC = () => {
     setErrorMessage('');
 
     setTimeout(() => {
-      const res = verifyEmailCode(verifEmail, code);
+      const res = verifyOtpCode(verifPhone || verifEmail, code);
       setIsVerifying(false);
 
       if (res.success) {
-        showToast('🎉 Email berhasil diverifikasi! Selamat datang di DelPOS.', 'success');
+        showToast('🎉 Nomor WhatsApp & akun berhasil diverifikasi! Selamat datang di DelPOS.', 'success');
       } else {
         setErrorMessage(res.message || 'Kode verifikasi tidak sesuai atau sudah kadaluarsa.');
       }
-    }, 600);
+    }, 500);
   };
 
-  // Resend OTP
+  // Resend OTP via WhatsApp
   const handleResendOtp = async () => {
     if (resendTimer > 0) return;
-    const res = await resendVerificationCode(verifEmail);
-    setCurrentOtpCode(res.code);
-    if (res.emailSent) {
-      setEmailDeliveryStatus('sent');
-    } else if (!res.configured) {
-      setEmailDeliveryStatus('unconfigured');
-    } else {
-      setEmailDeliveryStatus('failed');
+    try {
+      const res = await resendWhatsAppOtp(verifPhone, verifEmail);
+      setCurrentOtpCode(res.code);
+      setWaLink(res.waLink);
+      setWaDispatchedViaApi(res.dispatchedViaApi);
+      setWaApiMessage(res.apiMessage || '');
+      setResendTimer(60);
+      setOtpDigits(['', '', '', '', '', '']);
+      setErrorMessage('');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Gagal mengirim ulang kode OTP ke WhatsApp.');
     }
-    setEmailDeliveryError(res.error || res.message || '');
-    setResendTimer(60);
-    setOtpDigits(['', '', '', '', '', '']);
-    setErrorMessage('');
   };
 
   // Submit Login with Multi-Device Check
@@ -587,39 +612,50 @@ export const AuthView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Email Aktif */}
+                  {/* Nomor WhatsApp (Untuk Kirim OTP) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#1b1b23]">
+                        Nomor WhatsApp (Tujuan OTP) <span className="text-red-500">*</span>
+                      </label>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
+                        Via WhatsApp
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
+                      <input
+                        type="tel"
+                        required
+                        placeholder="Contoh: 081234567890"
+                        value={regPhone}
+                        onChange={(e) => setRegPhone(e.target.value)}
+                        className="w-full rounded-xl border border-emerald-300 bg-white py-2.5 pl-10 pr-3 text-xs font-medium text-[#1b1b23] focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                      />
+                    </div>
+                    <p className="text-[10px] text-[#767680] mt-1">
+                      Kode OTP verifikasi 6-digit dikirimkan langsung ke nomor WhatsApp ini.
+                    </p>
+                  </div>
+
+                  {/* Email Akun (Opsional) */}
                   <div>
                     <label className="block text-xs font-bold text-[#1b1b23] mb-1">
-                      Email Aktif (Untuk OTP) <span className="text-red-500">*</span>
+                      Email Akun <span className="text-[11px] font-normal text-[#767680]">(Opsional)</span>
                     </label>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
                       <input
                         type="email"
-                        required
-                        placeholder="nama@email.com"
+                        placeholder="nama@email.com (opsional)"
                         value={regEmail}
                         onChange={(e) => setRegEmail(e.target.value)}
                         className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-2.5 pl-10 pr-3 text-xs text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none"
                       />
                     </div>
-                  </div>
-
-                  {/* Nomor WhatsApp */}
-                  <div>
-                    <label className="block text-xs font-bold text-[#1b1b23] mb-1">
-                      Nomor WhatsApp / HP
-                    </label>
-                    <div className="relative">
-                      <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
-                      <input
-                        type="tel"
-                        placeholder="0812xxxxxxxx"
-                        value={regPhone}
-                        onChange={(e) => setRegPhone(e.target.value)}
-                        className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-2.5 pl-10 pr-3 text-xs text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none"
-                      />
-                    </div>
+                    <p className="text-[10px] text-[#767680] mt-1">
+                      Digunakan untuk identitas tambahan atau laporan bisnis.
+                    </p>
                   </div>
 
                   {/* Kata Sandi */}
@@ -691,101 +727,97 @@ export const AuthView: React.FC = () => {
             )}
 
             {/* ========================================================= */}
-            {/* 2. VERIFY EMAIL CODE (OTP SCREEN) */}
+            {/* 2. VERIFY WHATSAPP OTP SCREEN */}
             {/* ========================================================= */}
             {mode === 'verify' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="text-center space-y-2">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#ebeaff] text-[#4648d4] shadow-xs">
-                    <Mail className="h-7 w-7" />
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-xs">
+                    <MessageCircle className="h-7 w-7" />
                   </div>
-                  <h2 className="text-lg font-extrabold text-[#1b1b23]">Verifikasi Email Anda</h2>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/70 border border-emerald-300 text-emerald-800 text-[11px] font-bold">
+                    <Smartphone className="h-3.5 w-3.5" />
+                    <span>Verifikasi Nomor WhatsApp</span>
+                  </div>
+                  <h2 className="text-lg font-extrabold text-[#1b1b23]">Kode OTP Dialihkan ke WhatsApp</h2>
                   <p className="text-xs text-[#767680] max-w-sm mx-auto">
-                    Kami telah mengirimkan 6-digit kode OTP ke email:{' '}
-                    <strong className="text-[#1b1b23] block text-sm mt-0.5">{verifEmail}</strong>
+                    Kode verifikasi 6-digit dikirimkan ke nomor WhatsApp terdaftar:
+                    <strong className="text-emerald-700 block text-sm sm:text-base font-mono font-black mt-1">
+                      {formatDisplayPhone(verifPhone || regPhone)}
+                    </strong>
+                    {regBusinessName && (
+                      <span className="text-[11px] text-[#767680] block mt-0.5">
+                        Toko: {regBusinessName}
+                      </span>
+                    )}
                   </p>
                 </div>
 
-                {/* Dynamic Email Delivery Status & OTP Helper */}
-                {emailDeliveryStatus === 'sent' ? (
-                  <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/80 p-3.5 space-y-1.5 text-left shadow-2xs">
-                    <div className="flex items-start gap-2.5 text-xs text-emerald-950">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                {/* WhatsApp Direct Action & Status Card */}
+                <div className="rounded-2xl border border-emerald-200 bg-linear-to-b from-emerald-50/90 to-white p-4 space-y-3.5 text-left shadow-2xs">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-white shrink-0 shadow-xs">
+                      <MessageCircle className="h-5 w-5" />
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-xs sm:text-sm text-emerald-950">
+                          {waDispatchedViaApi
+                            ? 'Pesan OTP Terkirim via WhatsApp'
+                            : 'Pesan WhatsApp Siap Dibuka'}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 shrink-0">
+                          WhatsApp Aktif
+                        </span>
+                      </div>
+                      <p className="text-emerald-900 text-[11px] leading-relaxed">
+                        {waDispatchedViaApi
+                          ? `Pesan WhatsApp berisi 6-digit OTP telah dikirimkan ke nomor ${formatDisplayPhone(verifPhone || regPhone)}.`
+                          : 'Klik tombol di bawah untuk membuka WhatsApp dan menerima pesan kode verifikasi 6-digit resmi.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Direct Link to WhatsApp */}
+                  {waLink && (
+                    <a
+                      href={waLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs sm:text-sm py-3 px-4 shadow-sm transition-all cursor-pointer"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      <span>Buka WhatsApp & Terima Pesan OTP</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+
+                  {/* Active OTP Card for Instant Verification */}
+                  {currentOtpCode && (
+                    <div className="bg-white rounded-xl p-3 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
                       <div>
-                        <span className="font-bold text-emerald-950 block">Kode Terkirim ke Kotak Masuk!</span>
-                        <p className="text-emerald-800 text-[11px] leading-relaxed mt-0.5">
-                          Kode verifikasi resmi telah dikirim ke <strong>{verifEmail}</strong>. Silakan periksa folder <strong>Kotak Masuk (Inbox)</strong> atau folder <strong>Spam / Promosi</strong>.
-                        </p>
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-[#767680] block">
+                          Kode OTP WhatsApp Anda
+                        </span>
+                        <div className="text-2xl font-black font-mono tracking-widest text-emerald-600">
+                          {currentOtpCode}
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const digits = currentOtpCode.split('').slice(0, 6);
+                          setOtpDigits(digits);
+                          handleVerifyOtp(currentOtpCode);
+                        }}
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 transition-all shadow-xs cursor-pointer"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span>Gunakan Kode & Verifikasi Otomatis</span>
+                      </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-amber-300/90 bg-amber-50/90 p-4 space-y-3 text-left shadow-2xs">
-                    <div className="flex items-start gap-2.5 text-xs text-amber-950">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-200/80 text-amber-900 shrink-0 mt-0.5">
-                        <AlertTriangle className="h-4 w-4" />
-                      </div>
-                      <div className="space-y-1 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-bold text-xs sm:text-sm text-amber-950">
-                            {emailDeliveryStatus === 'unconfigured'
-                              ? 'Kredensial Email Belum Dikonfigurasi'
-                              : 'Pengiriman Email Gagal'}
-                          </span>
-                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 shrink-0">
-                            {emailDeliveryStatus === 'unconfigured' ? 'SMTP Inaktif' : 'Gagal Kirim'}
-                          </span>
-                        </div>
-                        <p className="text-amber-900 text-[11px] leading-relaxed">
-                          {emailDeliveryStatus === 'unconfigured'
-                            ? `Server cloud belum memiliki akun pengirim (SMTP_USER & SMTP_PASS di Secrets server). Email ke ${verifEmail} belum dapat diteruskan ke inbox.`
-                            : `Pengiriman ke ${verifEmail} mengalami kendala (${emailDeliveryError || 'Koneksi SMTP gagal'}).`}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Active OTP Card for Instant Verification */}
-                    {currentOtpCode && (
-                      <div className="bg-white rounded-xl p-3 border border-amber-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider font-bold text-[#767680] block">Kode OTP Verifikasi Anda</span>
-                          <div className="text-2xl font-black font-mono tracking-widest text-[#4648d4]">{currentOtpCode}</div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const digits = currentOtpCode.split('').slice(0, 6);
-                            setOtpDigits(digits);
-                            handleVerifyOtp(currentOtpCode);
-                          }}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#4648d4] hover:bg-[#3435ad] text-white font-bold text-xs px-3.5 py-2.5 transition-all shadow-xs cursor-pointer"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" />
-                          <span>Gunakan Kode & Verifikasi Otomatis</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Collapsible Guidance on Enabling Real SMTP */}
-                    <details className="text-xs text-amber-950 pt-1 group cursor-pointer">
-                      <summary className="font-bold flex items-center gap-1.5 hover:underline text-amber-900 text-[11px]">
-                        <HelpCircle className="h-3.5 w-3.5 text-amber-700" />
-                        <span>Cara Mengaktifkan Pengiriman Email Nyata ke Inbox (Gmail/SMTP)</span>
-                      </summary>
-                      <div className="mt-2 pl-4 space-y-1 text-[11px] text-amber-900 leading-relaxed border-l-2 border-amber-300">
-                        <p>1. Buka <strong>Google Account</strong> &gt; <strong>Keamanan</strong> &gt; Buat <strong>Sandi Aplikasi (App Password)</strong> 16-karakter.</p>
-                        <p>2. Di menu <strong>Settings</strong> AI Studio / Cloud Run, tambahkan environment variable:</p>
-                        <div className="bg-amber-100/90 p-2 rounded-lg font-mono text-[10px] text-amber-950 space-y-0.5 my-1">
-                          <div>SMTP_HOST=smtp.gmail.com</div>
-                          <div>SMTP_PORT=587</div>
-                          <div>SMTP_USER=emailanda@gmail.com</div>
-                          <div>SMTP_PASS=sandiaplikasi16karakter</div>
-                        </div>
-                        <p>3. Setelah disimpan, email OTP verifikasi dan reset kata sandi akan otomatis mendarat di inbox pengguna.</p>
-                      </div>
-                    </details>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* 6 Digit OTP Input Grid */}
                 <div className="space-y-3">
@@ -801,7 +833,7 @@ export const AuthView: React.FC = () => {
                         onChange={(e) => handleOtpChange(index, e.target.value)}
                         onKeyDown={(e) => handleOtpKeyDown(index, e)}
                         onPaste={handleOtpPaste}
-                        className="h-12 w-11 sm:h-14 sm:w-12 rounded-2xl border-2 border-[#d2d1dc] bg-[#fcf8ff] text-center font-mono text-xl sm:text-2xl font-extrabold text-[#1b1b23] shadow-xs focus:border-[#4648d4] focus:bg-white focus:outline-none transition-all"
+                        className="h-12 w-11 sm:h-14 sm:w-12 rounded-2xl border-2 border-[#d2d1dc] bg-[#fcf8ff] text-center font-mono text-xl sm:text-2xl font-extrabold text-[#1b1b23] shadow-xs focus:border-emerald-500 focus:bg-white focus:outline-none transition-all"
                       />
                     ))}
                   </div>
@@ -809,15 +841,15 @@ export const AuthView: React.FC = () => {
                   <div className="flex items-center justify-between text-xs text-[#767680] px-2">
                     <span>Masa berlaku: 10 menit</span>
                     {resendTimer > 0 ? (
-                      <span>Kirim ulang dalam <strong className="text-[#4648d4]">{resendTimer}s</strong></span>
+                      <span>Kirim ulang dalam <strong className="text-emerald-700">{resendTimer}s</strong></span>
                     ) : (
                       <button
                         type="button"
                         onClick={handleResendOtp}
-                        className="font-bold text-[#4648d4] hover:underline flex items-center gap-1"
+                        className="font-bold text-emerald-700 hover:underline flex items-center gap-1"
                       >
                         <RefreshCw className="h-3 w-3" />
-                        <span>Kirim Ulang Kode</span>
+                        <span>Kirim Ulang ke WhatsApp</span>
                       </button>
                     )}
                   </div>
@@ -830,7 +862,7 @@ export const AuthView: React.FC = () => {
                     type="button"
                     onClick={() => handleVerifyOtp()}
                     disabled={isVerifying}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4648d4] py-3.5 text-xs font-bold text-white shadow-md hover:bg-[#3435ad] transition-all disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 py-3.5 text-xs font-bold text-white shadow-md transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {isVerifying ? (
                       <>
@@ -840,7 +872,7 @@ export const AuthView: React.FC = () => {
                     ) : (
                       <>
                         <CheckCircle2 className="h-4 w-4" />
-                        <span>Verifikasi & Buka Aplikasi</span>
+                        <span>Verifikasi & Buka Aplikasi Kasir</span>
                       </>
                     )}
                   </button>
@@ -848,9 +880,9 @@ export const AuthView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setMode('register')}
-                    className="w-full py-2 text-xs font-semibold text-[#767680] hover:text-[#1b1b23] transition-colors text-center"
+                    className="w-full py-2 text-xs font-semibold text-[#767680] hover:text-[#1b1b23] transition-colors text-center cursor-pointer"
                   >
-                    ← Ubah Alamat Email Pendaftaran
+                    ← Ubah Nomor WhatsApp / Data Pendaftaran
                   </button>
                 </div>
               </div>
@@ -871,14 +903,14 @@ export const AuthView: React.FC = () => {
                 <div className="space-y-3.5">
                   <div>
                     <label className="block text-xs font-bold text-[#1b1b23] mb-1.5">
-                      Email Terdaftar
+                      Email atau Nomor WhatsApp Terdaftar
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
+                      <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
                       <input
-                        type="email"
+                        type="text"
                         required
-                        placeholder="nama@email.com"
+                        placeholder="nama@email.com atau 0812xxxxxxxx"
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
                         className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-3 pl-10 pr-3 text-xs text-[#1b1b23] focus:border-[#0055EE] focus:bg-white focus:outline-none transition-all shadow-2xs"

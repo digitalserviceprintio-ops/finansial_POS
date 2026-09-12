@@ -45,6 +45,11 @@ import {
 import { getCurrentDeviceInfo, getDeviceId, CurrentDeviceInfo } from '../utils/deviceInfo';
 import { sendRealVerificationEmail } from '../utils/emailService';
 import {
+  sendWhatsAppOtp as sendWhatsAppOtpService,
+  cleanWhatsAppNumber,
+  formatDisplayPhone,
+} from '../utils/whatsappService';
+import {
   uploadBackupToGoogleDrive,
   uploadBackupToCloudStorage,
   isScheduleDue,
@@ -99,6 +104,29 @@ interface AppContextType {
     message?: string;
   }>;
   verifyEmailCode: (email: string, code: string) => { success: boolean; message: string };
+  verifyOtpCode: (identifier: string, code: string) => { success: boolean; message: string };
+  sendWhatsAppOtp: (
+    phone: string,
+    fullName: string,
+    businessName: string,
+    email: string,
+    password?: string
+  ) => Promise<{
+    success: boolean;
+    code: string;
+    phone: string;
+    waLink: string;
+    dispatchedViaApi: boolean;
+    apiMessage?: string;
+  }>;
+  resendWhatsAppOtp: (phone: string, email?: string) => Promise<{
+    success: boolean;
+    code: string;
+    phone: string;
+    waLink: string;
+    dispatchedViaApi: boolean;
+    apiMessage?: string;
+  }>;
   resendVerificationCode: (email: string) => Promise<{
     code: string;
     emailSent: boolean;
@@ -844,20 +872,162 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const verifyEmailCode = (
+  const sendWhatsAppOtp = async (
+    phone: string,
+    fullName: string,
+    businessName: string,
     email: string,
+    password?: string
+  ): Promise<{
+    success: boolean;
+    code: string;
+    phone: string;
+    waLink: string;
+    dispatchedViaApi: boolean;
+    apiMessage?: string;
+  }> => {
+    if (password) {
+      const passCheck = validatePassword(password, 8);
+      if (!passCheck.isValid) {
+        throw new Error(passCheck.message || 'Kata sandi harus mengandung kombinasi huruf besar, kecil, angka, dan karakter.');
+      }
+    }
+
+    const cleanPhone = cleanWhatsAppNumber(phone);
+    if (!cleanPhone || cleanPhone.length < 8) {
+      throw new Error('Nomor telepon / WhatsApp tidak valid. Masukkan nomor HP aktif (contoh: 081234567890).');
+    }
+
+    const code = generateOtpCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 mins
+
+    const userData = {
+      fullName,
+      businessName,
+      email: email ? email.toLowerCase() : `user.${cleanPhone}@delpos.local`,
+      phone: cleanPhone,
+      role: 'owner' as const,
+      password: password || 'admin123',
+    };
+
+    const newPending = {
+      ...pendingVerifications,
+      [cleanPhone]: {
+        code,
+        expiresAt,
+        userData,
+      },
+      ...(email ? {
+        [email.toLowerCase()]: {
+          code,
+          expiresAt,
+          userData,
+        },
+      } : {}),
+    };
+    setPendingVerifications(newPending);
+
+    const waResult = await sendWhatsAppOtpService({
+      phone: cleanPhone,
+      code,
+      businessName,
+      fullName,
+    });
+
+    if (waResult.dispatchedViaApi) {
+      showToast(`📲 Kode OTP resmi berhasil dikirim ke WhatsApp ${formatDisplayPhone(cleanPhone)}.`, 'success');
+    } else {
+      showToast(`📲 Kode OTP WhatsApp telah disiapkan untuk ${formatDisplayPhone(cleanPhone)}.`, 'info');
+    }
+
+    setIsEmailModalOpen(false);
+
+    return {
+      success: true,
+      code,
+      phone: cleanPhone,
+      waLink: waResult.waLink,
+      dispatchedViaApi: waResult.dispatchedViaApi,
+      apiMessage: waResult.apiMessage,
+    };
+  };
+
+  const resendWhatsAppOtp = async (phone: string, email?: string): Promise<{
+    success: boolean;
+    code: string;
+    phone: string;
+    waLink: string;
+    dispatchedViaApi: boolean;
+    apiMessage?: string;
+  }> => {
+    const cleanPhone = cleanWhatsAppNumber(phone);
+    const existing = pendingVerifications[cleanPhone] || (email ? pendingVerifications[email.toLowerCase()] : undefined);
+    const code = generateOtpCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+
+    const userData = existing?.userData || {
+      fullName: 'Pemilik Usaha',
+      businessName: 'Toko UMKM',
+      email: email?.toLowerCase() || `user.${cleanPhone}@delpos.local`,
+      phone: cleanPhone,
+      role: 'owner' as const,
+      password: 'admin123',
+    };
+
+    setPendingVerifications((prev) => ({
+      ...prev,
+      [cleanPhone]: {
+        code,
+        expiresAt,
+        userData,
+      },
+      ...(userData.email ? {
+        [userData.email.toLowerCase()]: {
+          code,
+          expiresAt,
+          userData,
+        },
+      } : {}),
+    }));
+
+    const waResult = await sendWhatsAppOtpService({
+      phone: cleanPhone,
+      code,
+      businessName: userData.businessName,
+      fullName: userData.fullName,
+    });
+
+    if (waResult.dispatchedViaApi) {
+      showToast(`📲 Kode OTP baru dikirim ke WhatsApp ${formatDisplayPhone(cleanPhone)}.`, 'success');
+    } else {
+      showToast(`📲 Kode OTP WhatsApp baru disiapkan untuk ${formatDisplayPhone(cleanPhone)}.`, 'info');
+    }
+
+    return {
+      success: true,
+      code,
+      phone: cleanPhone,
+      waLink: waResult.waLink,
+      dispatchedViaApi: waResult.dispatchedViaApi,
+      apiMessage: waResult.apiMessage,
+    };
+  };
+
+  const verifyOtpCode = (
+    identifier: string,
     code: string
   ): { success: boolean; message: string } => {
-    const emailKey = email.toLowerCase();
-    const pending = pendingVerifications[emailKey];
+    const keyLower = (identifier || '').trim().toLowerCase();
+    const keyPhone = cleanWhatsAppNumber(identifier);
+    const pending = pendingVerifications[keyLower] || pendingVerifications[keyPhone];
 
     // Check code matches
     if (!pending || pending.code !== code.trim()) {
-      return { success: false, message: 'Kode verifikasi tidak cocok. Silakan periksa kembali email Anda.' };
+      return { success: false, message: 'Kode OTP tidak cocok. Silakan periksa kembali pesan WhatsApp Anda.' };
     }
 
     if (Date.now() > pending.expiresAt) {
-      return { success: false, message: 'Kode verifikasi telah kadaluarsa. Silakan kirim ulang kode baru.' };
+      return { success: false, message: 'Kode OTP telah kadaluarsa. Silakan kirim ulang kode baru.' };
     }
 
     // Register current device session
@@ -870,13 +1040,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isActive: true,
     };
 
+    const userEmail = pending.userData.email || `${keyPhone}@delpos.local`;
+
     // Create & register user
     const newUserId = `USR-${String(registeredUsers.length + 1).padStart(3, '0')}`;
     const newUser: AuthUser = {
       id: newUserId,
       fullName: pending.userData.fullName || 'Pemilik Usaha',
-      email: emailKey,
-      phone: pending.userData.phone || '081234567890',
+      email: userEmail,
+      phone: pending.userData.phone || keyPhone || '081234567890',
       businessName: pending.userData.businessName || 'Toko UMKM',
       role: 'owner',
       isEmailVerified: true,
@@ -898,7 +1070,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     setCashierName(newUser.fullName);
-    setRegisteredUsers((prev) => [newUser, ...prev.filter((u) => u.email !== emailKey)]);
+    setRegisteredUsers((prev) => [newUser, ...prev.filter((u) => u.email !== userEmail && u.phone !== newUser.phone)]);
     try {
       localStorage.removeItem('finansialpro_logged_out');
       localStorage.setItem('finansialpro_current_user', JSON.stringify(newUser));
@@ -910,14 +1082,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Persist newly registered account and active session to Firestore
     saveUserToFirestore(newUser).catch((err) => console.warn('Could not save user to Firestore:', err));
-    setUserActiveSessionInFirestore(emailKey, newSession).catch((err) => console.warn('Could not set session in Firestore:', err));
+    setUserActiveSessionInFirestore(userEmail, newSession).catch((err) => console.warn('Could not set session in Firestore:', err));
 
     // Clean pending
     const updatedPending = { ...pendingVerifications };
-    delete updatedPending[emailKey];
+    delete updatedPending[keyLower];
+    if (keyPhone) delete updatedPending[keyPhone];
     setPendingVerifications(updatedPending);
 
-    return { success: true, message: 'Verifikasi berhasil!' };
+    return { success: true, message: 'Verifikasi nomor WhatsApp berhasil! Selamat datang di DelPOS.' };
+  };
+
+  const verifyEmailCode = (
+    email: string,
+    code: string
+  ): { success: boolean; message: string } => {
+    return verifyOtpCode(email, code);
   };
 
   // Pending Password Resets
@@ -1075,6 +1255,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     userEmail?: string;
   }> => {
     const emailKey = email.toLowerCase().trim();
+    const cleanPhone = cleanWhatsAppNumber(email);
 
     // 1. Fetch latest user doc from Cloud Firestore for cross-device support
     let targetUser: AuthUser | null = null;
@@ -1085,7 +1266,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (!targetUser) {
-      targetUser = registeredUsers.find((u) => u.email.toLowerCase() === emailKey) || null;
+      targetUser =
+        registeredUsers.find(
+          (u) =>
+            u.email.toLowerCase() === emailKey ||
+            (cleanPhone && u.phone && cleanWhatsAppNumber(u.phone) === cleanPhone)
+        ) || null;
     }
 
     if (!targetUser) {
@@ -2250,6 +2436,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registeredUsers,
         sendVerificationEmail,
         verifyEmailCode,
+        verifyOtpCode,
+        sendWhatsAppOtp,
+        resendWhatsAppOtp,
         resendVerificationCode,
         sendPasswordResetLink,
         resetUserPassword,

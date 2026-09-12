@@ -439,6 +439,85 @@ app.get('/api/email-status', (req, res) => {
   });
 });
 
+// Helper clean phone for WhatsApp
+function cleanWhatsAppNumberServer(phone: string): string {
+  let cleaned = (phone || '').replace(/[^0-9]/g, '');
+  if (cleaned.startsWith('08')) {
+    cleaned = '62' + cleaned.slice(1);
+  } else if (cleaned.startsWith('8')) {
+    cleaned = '62' + cleaned;
+  } else if (cleaned.startsWith('0')) {
+    cleaned = '62' + cleaned.slice(1);
+  }
+  return cleaned;
+}
+
+// WhatsApp OTP dispatch endpoint
+app.post('/api/send-whatsapp-otp', async (req, res) => {
+  try {
+    const { phone, code, businessName, fullName } = req.body;
+    if (!phone || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nomor WhatsApp dan kode OTP diperlukan.',
+      });
+    }
+
+    const cleanPhone = cleanWhatsAppNumberServer(phone);
+    const recipientName = fullName || businessName || 'Pemilik Usaha';
+    const store = businessName ? ` (${businessName})` : '';
+    const message = `*DELPOS - KODE VERIFIKASI RESMI (OTP)*\n\nHalo *${recipientName}*${store},\n\nBerikut adalah 6-digit kode OTP Anda untuk mengaktifkan akun kasir DelPOS:\n\n👉 *${code}* 👈\n\n⏳ *Masa Berlaku:* 10 Menit\n🔒 *Penting:* Jangan berikan kode ini kepada siapapun termasuk pihak yang mengaku sebagai DelPOS.\n\nTerima kasih,\n_Tim DelPOS UMKM System_`;
+    const waLink = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+
+    let dispatchedViaApi = false;
+    let apiMessage = 'Tautan WhatsApp resmi siap dibuka.';
+
+    // Check if Fonnte WhatsApp Gateway API is configured
+    const fonnteToken = process.env.FONNTE_TOKEN;
+    if (fonnteToken) {
+      try {
+        const fonnteRes = await fetch('https://api.fonnte.com/send', {
+          method: 'POST',
+          headers: {
+            Authorization: fonnteToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            target: cleanPhone,
+            message,
+            countryCode: '62',
+          }),
+        });
+        const fonnteData = await fonnteRes.json();
+        if (fonnteData.status) {
+          dispatchedViaApi = true;
+          apiMessage = 'Pesan WhatsApp berhasil dikirimkan via WhatsApp Gateway.';
+        }
+      } catch (fErr) {
+        console.warn('[DelPOS WhatsApp] Fonnte gateway error:', fErr);
+      }
+    }
+
+    console.log(`[DelPOS WhatsApp OTP] Target: ${cleanPhone}, Code: ${code}, Dispatched: ${dispatchedViaApi}`);
+
+    return res.json({
+      success: true,
+      phone: cleanPhone,
+      code,
+      message,
+      waLink,
+      dispatchedViaApi,
+      apiMessage,
+    });
+  } catch (err: any) {
+    console.error('[DelPOS WhatsApp OTP] Error:', err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || 'Gagal menyiapkan pengiriman WhatsApp OTP.',
+    });
+  }
+});
+
 // Real email dispatch endpoint for registration OTP and password reset
 app.post('/api/send-verification-email', async (req, res) => {
   try {
