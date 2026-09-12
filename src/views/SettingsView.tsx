@@ -34,6 +34,8 @@ import {
   WifiOff,
   Cloud,
   LogOut,
+  Camera,
+  FolderOpen,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -42,6 +44,7 @@ import {
 } from '../utils/bluetoothPrinter';
 import { BluetoothPrinterModal } from '../components/modals/BluetoothPrinterModal';
 import { soundManager, requestNativeNotificationPermission, sendBrowserNotification } from '../utils/soundAlert';
+import { DEFAULT_AVATAR_PRESETS, processAvatarImageFile } from '../utils/avatarUtils';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -55,12 +58,17 @@ export const SettingsView: React.FC = () => {
     currentLicense,
     activateLicenseKey,
     setIsPwaInstallModalOpen,
+    setIsEditProfilePhotoModalOpen,
     lockDurationMinutes,
     setLockDurationMinutes,
     lockAppNow,
     currentUser,
     logoutUser,
   } = useApp();
+
+  const avatarFileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
+  const [avatarUploadInfo, setAvatarUploadInfo] = useState<{ name: string; sizeFormatted: string } | null>(null);
 
   const [formData, setFormData] = useState({
     name: storeProfile.name,
@@ -71,6 +79,28 @@ export const SettingsView: React.FC = () => {
     taxRate: storeProfile.taxRate * 100,
     avatarUrl: storeProfile.avatarUrl,
   });
+
+  // Keep avatar in sync with storeProfile
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      avatarUrl: storeProfile.avatarUrl,
+    }));
+  }, [storeProfile.avatarUrl]);
+
+  const handleAvatarFileUpload = (file: File) => {
+    processAvatarImageFile(
+      file,
+      (dataUrl, info) => {
+        setFormData((prev) => ({ ...prev, avatarUrl: dataUrl }));
+        setAvatarUploadInfo(info);
+        showToast(`Foto "${info.name}" (${info.sizeFormatted}) berhasil dipilih dari galeri!`, 'success');
+      },
+      (errorMsg) => {
+        showToast(errorMsg, 'warning');
+      }
+    );
+  };
 
   const [currentCashier, setCurrentCashier] = useState(cashierName);
   const [isBtModalOpen, setIsBtModalOpen] = useState(false);
@@ -105,13 +135,6 @@ export const SettingsView: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
-
-  const avatarOptions = [
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuCoLtV3Bv2OBXPlq_WrGjzOKb2hx7Pr3DOTjypa8dkEKduOjjWvN91FeXpeuVJDGRacnpFhqLouF2glsjyg154-ONwKg9-AXq2ylnHCQIAwb0pQ9662t3tt1reJkfrz46PuKvm9rTpygmqRrJUs0iC2FvO13DZ8nlMx-0eSm-8yba6zLFIndlcCVnmVfynCOWQHJRodfFxaOXcZ1AmWZ9mFAugAFABkMmuQ6rlyglKy280HkFHaQKc',
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_UeVtMqix0sJCZHs2TtKM5-d72Pea84EAktZj50a8963OhMvLReqs1NHQ5_GHU31yQIOvnrJgSfVJ_GeiKlPatJEFijCOybVvFFiMGK5NOxgk9QrAVW_iXOt0iW_JoPaZYQPCnyP7yXiRGmSsKfKm7wGSICkKlm5wlq8E4GuzgUAsgAUa1swPQ-m8CDYgnJ9jjXFUt_9CTSEQH_yEVGaOFNO6eA39ylX7lz2CTC7oAh5YPsc0Mc',
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuC7B9KMRoYvNAmqNyV5w06IdeHLX2otFiqPJA8kZ3Goi212mrGTweb6BNH2e6e8Yb9MlgT8nzNzC-HWRvuUa2TOoyX4hVm44IyZcPbAocXR8y4C-lEK9s3rKLhxMg4b4pPpy_wMjMwxgNzG7yEfQlAU3aD4JIYfRfZRo6O6gWdkAwwkUTsSVqMbOO55lJ8DXxxWawcQlVMywxpMFfKkjQbZxcsAoEGnPnZvyDbWgRciVO1BOs7MuyU',
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuAdVT5Ge0_B56pivGW9S29joD83BqOZlq4mFS37QNwdClBoNOPykFiDhmJpz01rrRcVALt-qt3gTDCCdoCU4cpiP4Qv4WmM_xuZ7Gw1Iw5mEOwy9zdjmlqsoFtETWLmXkpkvO079B6bE1FVO-U6i1VgAGE7Ehm12LDBunosqG61dwe-5ilOt1wDkGLCKtwtF-ASBRc0AcdkE-Sz_sn8HV9fEyOBwdX-LUme7BlTWrs1-T0X_FfcRRw',
-  ];
 
   const handleQuickBackup = () => {
     const backupObj = exportBackupJson();
@@ -609,36 +632,190 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Profil Avatar Owner */}
-        <div className="bg-white p-6 rounded-2xl border border-[#e2e1ec] shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[#f3f2fa]">
-            <ImageIcon className="h-5 w-5 text-[#4648d4]" />
-            <h3 className="text-sm font-bold text-[#1b1b23]">Foto Profil Pemilik</h3>
+        {/* Profil Avatar Owner - Upload dari Galeri & Presets */}
+        <div className="bg-white p-6 rounded-2xl border border-[#e2e1ec] shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#f3f2fa]">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ebeaff] text-[#4648d4] shadow-2xs">
+                <Camera className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-[#1b1b23]">Foto Profil Pemilik Usaha</h3>
+                <p className="text-xs text-[#767680]">
+                  Bisa upload foto langsung dari galeri HP / file komputer atau pilih koleksi avatar
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsEditProfilePhotoModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-[#4648d4]/30 bg-[#ebeaff]/60 hover:bg-[#ebeaff] px-3.5 py-1.5 text-xs font-bold text-[#4648d4] transition-all cursor-pointer self-start sm:self-auto"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Buka Galeri Avatar Lengkap</span>
+            </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <img
-              src={formData.avatarUrl}
-              alt="Selected avatar"
-              className="h-16 w-16 rounded-full object-cover ring-4 ring-[#ebeaff]"
-              referrerPolicy="no-referrer"
-            />
-            <div className="space-y-1">
-              <p className="text-xs font-bold text-[#1b1b23]">Pilih Avatar Presets:</p>
-              <div className="flex items-center gap-2">
-                {avatarOptions.map((url, i) => (
+          {/* Hidden File Input for Gallery / Local Device Selection */}
+          <input
+            ref={avatarFileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                handleAvatarFileUpload(e.target.files[0]);
+              }
+            }}
+            className="hidden"
+            id="settings-avatar-file-input"
+          />
+
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+            {/* Avatar Preview with Camera Overlay Badge */}
+            <div className="relative group shrink-0">
+              <img
+                src={formData.avatarUrl}
+                alt="Foto Profil Pemilik"
+                className="h-24 w-24 rounded-full object-cover ring-4 ring-[#ebeaff] shadow-md transition-all group-hover:ring-[#4648d4]/40"
+                referrerPolicy="no-referrer"
+              />
+              <button
+                type="button"
+                onClick={() => avatarFileInputRef.current?.click()}
+                className="absolute bottom-0 right-0 p-2 rounded-full bg-[#4648d4] text-white shadow-md hover:bg-[#3435ad] transition-transform hover:scale-110 cursor-pointer"
+                title="Pilih foto dari galeri perangkat"
+              >
+                <Camera className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Quick Actions & Upload Box */}
+            <div className="flex-1 space-y-3 w-full">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => avatarFileInputRef.current?.click()}
+                  className="flex items-center gap-2 rounded-xl bg-[#4648d4] text-white px-4 py-2.5 text-xs font-bold shadow-xs hover:bg-[#3435ad] active:scale-98 transition-all cursor-pointer"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  <span>Upload / Ambil dari Galeri</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsEditProfilePhotoModalOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl border border-[#d2d1dc] bg-white px-3.5 py-2.5 text-xs font-bold text-[#1b1b23] hover:bg-[#f3f2fa] transition-all cursor-pointer"
+                >
+                  <ImageIcon className="h-4 w-4 text-[#767680]" />
+                  <span>Pilihan Preset Lainnya</span>
+                </button>
+
+                {formData.avatarUrl.startsWith('data:image') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData({ ...formData, avatarUrl: DEFAULT_AVATAR_PRESETS[0].url });
+                      setAvatarUploadInfo(null);
+                      showToast('Foto dikembalikan ke avatar bawaan', 'info');
+                    }}
+                    className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700 px-2 py-2 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Reset ke Bawaan</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Upload Status / Drag Area Helper */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingAvatar(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setIsDraggingAvatar(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingAvatar(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleAvatarFileUpload(e.dataTransfer.files[0]);
+                  }
+                }}
+                onClick={() => avatarFileInputRef.current?.click()}
+                className={`flex items-center justify-between p-3 rounded-xl border border-dashed transition-all cursor-pointer ${
+                  isDraggingAvatar
+                    ? 'border-[#4648d4] bg-[#ebeaff]/40'
+                    : 'border-[#d2d1dc] bg-[#fcf8ff] hover:border-[#4648d4] hover:bg-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Upload className="h-4 w-4 text-[#4648d4] shrink-0" />
+                  <span className="text-xs text-[#46464f] truncate">
+                    {avatarUploadInfo
+                      ? `Foto terpilih: ${avatarUploadInfo.name} (${avatarUploadInfo.sizeFormatted})`
+                      : 'Bisa juga seret & lepas file gambar ke sini (JPG, PNG, WebP)'}
+                  </span>
+                </div>
+                <span className="text-[11px] font-bold text-[#4648d4] underline shrink-0 ml-2">
+                  Telusuri
+                </span>
+              </div>
+
+              {/* Status Badge */}
+              <div className="flex items-center gap-2 text-xs">
+                {formData.avatarUrl.startsWith('data:image') ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md font-semibold text-[11px]">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>Foto Galeri Mandiri Aktif</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-md font-semibold text-[11px]">
+                    <Sparkles className="h-3 w-3" />
+                    <span>Preset Avatar Aktif</span>
+                  </span>
+                )}
+                <span className="text-[11px] text-[#767680]">
+                  Disinkronkan ke header kasir & profil toko
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Preset Avatars Picker */}
+          <div className="pt-3 border-t border-[#f3f2fa] space-y-2">
+            <p className="text-xs font-bold text-[#1b1b23]">Koleksi Avatar Cepat (Klik untuk memilih):</p>
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-1 no-scrollbar">
+              {DEFAULT_AVATAR_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => {
+                    setFormData({ ...formData, avatarUrl: preset.url });
+                    setAvatarUploadInfo(null);
+                  }}
+                  className={`group relative shrink-0 rounded-full transition-all cursor-pointer ${
+                    formData.avatarUrl === preset.url
+                      ? 'ring-3 ring-[#4648d4] ring-offset-2 scale-105'
+                      : 'opacity-70 hover:opacity-100 hover:scale-102 ring-1 ring-slate-200'
+                  }`}
+                  title={preset.name}
+                >
                   <img
-                    key={i}
-                    src={url}
-                    alt={`Avatar ${i + 1}`}
-                    onClick={() => setFormData({ ...formData, avatarUrl: url })}
-                    className={`h-10 w-10 rounded-full object-cover cursor-pointer border-2 transition-all ${
-                      formData.avatarUrl === url ? 'border-[#4648d4] scale-110' : 'border-transparent opacity-70 hover:opacity-100'
-                    }`}
+                    src={preset.url}
+                    alt={preset.name}
+                    className="h-11 w-11 rounded-full object-cover"
                     referrerPolicy="no-referrer"
                   />
-                ))}
-              </div>
+                  {formData.avatarUrl === preset.url && (
+                    <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-[#4648d4] text-white flex items-center justify-center ring-1 ring-white shadow-xs">
+                      <Check className="h-2.5 w-2.5 stroke-[3]" />
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </div>

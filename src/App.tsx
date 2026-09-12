@@ -29,9 +29,9 @@ import { PaymentModal } from './components/modals/PaymentModal';
 import { ReceiptModal } from './components/modals/ReceiptModal';
 import { AddProductModal } from './components/modals/AddProductModal';
 import { AddExpenseModal } from './components/modals/AddExpenseModal';
-import { EmailInboxSimulationModal } from './components/modals/EmailInboxSimulationModal';
 import { CustomerCatalogQRModal } from './components/modals/CustomerCatalogQRModal';
 import { PwaInstallModal } from './components/modals/PwaInstallModal';
+import { EditProfilePhotoModal } from './components/modals/EditProfilePhotoModal';
 import { AppLockModal } from './components/modals/AppLockModal';
 import { NotificationPopupManager } from './components/NotificationPopupManager';
 import { LicenseExpirationAlert } from './components/LicenseExpirationAlert';
@@ -50,6 +50,8 @@ const MainAppContent: React.FC = () => {
     setIsCatalogQRModalOpen,
     isPwaInstallModalOpen,
     setIsPwaInstallModalOpen,
+    isEditProfilePhotoModalOpen,
+    setIsEditProfilePhotoModalOpen,
     currentLicense,
   } = useApp();
 
@@ -131,7 +133,6 @@ const MainAppContent: React.FC = () => {
     return (
       <>
         <AuthView />
-        <EmailInboxSimulationModal />
         <ToastContainer />
       </>
     );
@@ -236,7 +237,6 @@ const MainAppContent: React.FC = () => {
       {/* Global Modals */}
       <PaymentModal />
       <ReceiptModal />
-      <EmailInboxSimulationModal />
       <CustomerCatalogQRModal
         isOpen={isCatalogQRModalOpen}
         onClose={() => setIsCatalogQRModalOpen(false)}
@@ -256,6 +256,10 @@ const MainAppContent: React.FC = () => {
       <PwaInstallModal
         isOpen={isPwaInstallModalOpen}
         onClose={() => setIsPwaInstallModalOpen(false)}
+      />
+      <EditProfilePhotoModal
+        isOpen={isEditProfilePhotoModalOpen}
+        onClose={() => setIsEditProfilePhotoModalOpen(false)}
       />
 
       {/* Auto-Lock Inactivity Security Pop-up Modal (10 Menit) */}

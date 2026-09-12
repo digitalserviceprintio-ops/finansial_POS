@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import {
   getFirestore,
   initializeFirestore,
@@ -23,22 +24,26 @@ setLogLevel('silent');
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Configure Firestore with forced long polling for reliable connection in iframes and reverse proxies
-const dbId = (firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId;
+const rawDbId = (firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId;
+const dbId = rawDbId && rawDbId !== '(default)' && rawDbId.trim() !== '' ? rawDbId.trim() : undefined;
+
 let firestoreInstance;
 try {
-  firestoreInstance = initializeFirestore(
-    app,
-    {
-      experimentalForceLongPolling: true,
-    },
-    dbId
-  );
+  firestoreInstance = dbId
+    ? initializeFirestore(app, { experimentalForceLongPolling: true }, dbId)
+    : initializeFirestore(app, { experimentalForceLongPolling: true });
 } catch {
-  firestoreInstance = getFirestore(app, dbId);
+  try {
+    firestoreInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+  } catch {
+    firestoreInstance = getFirestore(app);
+  }
 }
 
 export const db = firestoreInstance;
 export const auth = getAuth(app);
+export const storage = getStorage(app);
+export { firebaseConfig };
 
 // Safe connectivity check without forcing disruptive server probes
 export async function testFirestoreConnection(): Promise<boolean> {
@@ -68,6 +73,10 @@ export interface FirestoreErrorInfo {
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
     tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
   };
 }
 
@@ -75,9 +84,17 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errMsg = error instanceof Error ? error.message : String(error);
   const errCode = (error as { code?: string })?.code;
 
-  // Handle expected offline or network unavailability gracefully without throwing or crashing
-  if (errCode === 'unavailable' || errMsg.includes('unavailable') || errMsg.includes('offline') || errMsg.includes('Failed to get document')) {
-    console.warn(`Firestore offline fallback: ${operationType} on ${path}. Operating in local cache mode.`);
+  // Handle expected offline, network unavailability, or permission restrictions gracefully without crashing
+  if (
+    errCode === 'unavailable' ||
+    errCode === 'permission-denied' ||
+    errMsg.includes('unavailable') ||
+    errMsg.includes('offline') ||
+    errMsg.includes('Failed to get document') ||
+    errMsg.includes('Missing or insufficient permissions') ||
+    errMsg.includes('permission-denied')
+  ) {
+    console.warn(`Firestore local/offline fallback active: ${operationType} on ${path}. (${errMsg})`);
     return;
   }
 
@@ -89,6 +106,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || [],
     },
     operationType,
     path,
@@ -104,7 +125,7 @@ export function getUserDocId(userOrEmail: string): string {
 /**
  * Fetch all registered users from Firestore cloud database
  */
-export async function fetchRegisteredUsersFromFirestore(): Promise<AuthUser[]> {
+export async function fetchRegisteredUsersFromFirestore(): Promise<AuthUser[] | null> {
   const path = 'registered_users';
   try {
     const snap = await getDocs(collection(db, path));
@@ -118,7 +139,7 @@ export async function fetchRegisteredUsersFromFirestore(): Promise<AuthUser[]> {
     return users;
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
-    return [];
+    return null;
   }
 }
 

@@ -23,6 +23,7 @@ import {
   Smartphone,
   Download,
   Lock,
+  Camera,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DigitalClockAndCalendar } from './DigitalClockAndCalendar';
@@ -46,8 +47,6 @@ export const TopHeader: React.FC = () => {
     products,
     cart,
     transactions,
-    latestSimulatedEmail,
-    setIsEmailModalOpen,
     logoutUser,
     notifications,
     unreadNotificationCount,
@@ -56,6 +55,8 @@ export const TopHeader: React.FC = () => {
     clearNotifications,
     deleteNotification,
     setIsPwaInstallModalOpen,
+    isEditProfilePhotoModalOpen,
+    setIsEditProfilePhotoModalOpen,
     lockAppNow,
     lockDurationMinutes,
   } = useApp();
@@ -231,19 +232,6 @@ export const TopHeader: React.FC = () => {
 
               {/* Real-time Digital Clock & Interactive Calendar */}
               <DigitalClockAndCalendar />
-
-              {/* Live Email Inbox Shortcut if an OTP was sent */}
-              {latestSimulatedEmail && (
-                <button
-                  onClick={() => setIsEmailModalOpen(true)}
-                  className="hidden lg:flex items-center gap-1.5 rounded-xl bg-purple-50 border border-purple-200 px-2.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all shadow-2xs shrink-0"
-                  title="Lihat Email OTP Masuk"
-                >
-                  <Mail className="h-3.5 w-3.5" />
-                  <span className="hidden xl:inline">OTP:</span>
-                  <span className="font-mono font-extrabold">{latestSimulatedEmail.code}</span>
-                </button>
-              )}
 
               {/* Cashier Shift Status Chip (Desktop) */}
               <div className="hidden 2xl:flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 border border-emerald-200 text-xs font-medium text-emerald-800 shrink-0">
@@ -539,6 +527,16 @@ export const TopHeader: React.FC = () => {
                       >
                         <HardDrive className="h-4 w-4 text-purple-600" />
                         <span>Cadangan & Restore JSON</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsEditProfilePhotoModalOpen(true);
+                          setShowProfileMenu(false);
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-[#4648d4] hover:bg-[#ebeaff] transition-colors"
+                      >
+                        <Camera className="h-4 w-4 text-[#4648d4]" />
+                        <span>Ubah Foto Profil (Upload / Galeri)</span>
                       </button>
                       <button
                         onClick={() => {

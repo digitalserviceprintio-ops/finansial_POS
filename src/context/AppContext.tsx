@@ -43,6 +43,7 @@ import {
   subscribeToUserSession,
 } from '../utils/firebase';
 import { getCurrentDeviceInfo, getDeviceId, CurrentDeviceInfo } from '../utils/deviceInfo';
+import { sendRealVerificationEmail } from '../utils/emailService';
 import {
   uploadBackupToGoogleDrive,
   uploadBackupToCloudStorage,
@@ -89,9 +90,9 @@ interface AppContextType {
     businessName: string,
     phone: string,
     password?: string
-  ) => Promise<{ success: boolean; code: string }>;
+  ) => Promise<{ success: boolean; code: string; emailSent?: boolean }>;
   verifyEmailCode: (email: string, code: string) => { success: boolean; message: string };
-  resendVerificationCode: (email: string) => string;
+  resendVerificationCode: (email: string) => Promise<string> | string;
   sendPasswordResetLink: (email: string) => Promise<{ success: boolean; message: string; resetLink?: string }>;
   resetUserPassword: (email: string, token: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   loginWithCredentials: (
@@ -236,6 +237,10 @@ interface AppContextType {
   // PWA & Android APK Installation
   isPwaInstallModalOpen: boolean;
   setIsPwaInstallModalOpen: (open: boolean) => void;
+
+  // Owner Profile Photo Management
+  isEditProfilePhotoModalOpen: boolean;
+  setIsEditProfilePhotoModalOpen: (open: boolean) => void;
 
   // Utilities
   formatCurrency: (amount: number) => string;
@@ -422,6 +427,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [isCatalogQRModalOpen, setIsCatalogQRModalOpen] = useState<boolean>(false);
   const [isPwaInstallModalOpen, setIsPwaInstallModalOpen] = useState<boolean>(false);
+  const [isEditProfilePhotoModalOpen, setIsEditProfilePhotoModalOpen] = useState<boolean>(false);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -602,8 +608,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             localStorage.setItem('finansialpro_registered_users', JSON.stringify(merged));
             return merged;
           });
-        } else {
-          // Initialize Firestore with default initial users so they are available on any device
+        } else if (cloudUsers !== null && cloudUsers.length === 0) {
+          // Initialize Firestore with default initial users only if the cloud query was successful and empty
           for (const u of initialAuthUsers) {
             await saveUserToFirestore(u);
           }
@@ -712,7 +718,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     businessName: string,
     phone: string,
     password?: string
-  ): Promise<{ success: boolean; code: string }> => {
+  ): Promise<{ success: boolean; code: string; emailSent?: boolean }> => {
     // Validate password combination if provided
     if (password) {
       const passCheck = validatePassword(password, 8);
@@ -741,23 +747,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setPendingVerifications(newPending);
 
-    const now = new Date();
-    const simulated: SimulatedEmail = {
-      to: email,
-      subject: `Kode Verifikasi Akun DelPOS: ${code}`,
+    // Kirim email asli ke inbox email penerima via server
+    const emailResult = await sendRealVerificationEmail({
+      email: email.toLowerCase(),
       code,
-      sentAt: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} WIB`,
-      previewText: `Gunakan kode OTP ${code} untuk memverifikasi akun usaha ${businessName}.`,
-    };
+      businessName,
+      fullName,
+      type: 'register',
+    });
 
-    setLatestSimulatedEmail(simulated);
-    setIsEmailModalOpen(true);
-    showToast(`📧 Kode OTP ${code} terkirim ke email ${email}!`, 'info');
+    if (emailResult.success) {
+      showToast(`📧 Kode verifikasi resmi telah dikirim ke email ${email}. Periksa kotak masuk Anda!`, 'success');
+    } else if (emailResult.configured === false) {
+      showToast(`⚠️ Kredensial SMTP server belum diisi. Kode telah dibuat untuk verifikasi.`, 'warning');
+    } else {
+      showToast(`⚠️ Pengiriman email ke ${email} gagal: ${emailResult.error || 'Periksa server SMTP'}`, 'warning');
+    }
 
-    return { success: true, code };
+    // Do NOT open simulation modal
+    setIsEmailModalOpen(false);
+
+    return { success: true, code, emailSent: emailResult.success };
   };
 
-  const resendVerificationCode = (email: string): string => {
+  const resendVerificationCode = async (email: string): Promise<string> => {
     const code = generateOtpCode();
     const expiresAt = Date.now() + 10 * 60 * 1000;
     const existing = pendingVerifications[email.toLowerCase()];
@@ -771,17 +784,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     }));
 
-    const now = new Date();
-    const simulated: SimulatedEmail = {
-      to: email,
-      subject: `Kode Verifikasi Baru DelPOS: ${code}`,
+    // Kirim ulang email asli
+    const emailResult = await sendRealVerificationEmail({
+      email: email.toLowerCase(),
       code,
-      sentAt: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} WIB`,
-      previewText: `Kode OTP baru Anda adalah ${code}.`,
-    };
+      businessName: existing?.userData?.businessName,
+      fullName: existing?.userData?.fullName,
+      type: 'register',
+    });
 
-    setLatestSimulatedEmail(simulated);
-    setIsEmailModalOpen(true);
+    if (emailResult.success) {
+      showToast(`📧 Kode OTP baru telah dikirimkan ke email ${email}.`, 'success');
+    } else {
+      showToast(`Kode baru telah di-generate untuk verifikasi ${email}.`, 'info');
+    }
+
+    setIsEmailModalOpen(false);
     return code;
   };
 
@@ -919,24 +937,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       [emailKey]: { token, email: emailKey, expiresAt },
     }));
 
-    const now = new Date();
-    const simulated: SimulatedEmail = {
-      to: targetUser.email,
-      subject: `[DelPOS] Permintaan Perubahan Kata Sandi: ${targetUser.businessName || targetUser.fullName}`,
-      code: token.slice(-6).toUpperCase(),
-      sentAt: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} WIB`,
-      previewText: `Klik link perubahan kata sandi untuk akun DelPOS Anda.`,
-      type: 'reset_password',
+    // Dispatch real email via server
+    const emailResult = await sendRealVerificationEmail({
+      email: targetUser.email,
+      fullName: targetUser.fullName,
+      businessName: targetUser.businessName,
       resetLink,
-    };
+      type: 'reset_password',
+    });
 
-    setLatestSimulatedEmail(simulated);
-    setIsEmailModalOpen(true);
-    showToast(`📧 Link perubahan kata sandi telah dikirim ke ${targetUser.email}!`, 'info');
+    if (emailResult.success) {
+      showToast(`📧 Link pemulihan kata sandi telah dikirim ke ${targetUser.email}!`, 'success');
+    } else {
+      showToast(`Tautan perubahan kata sandi telah disiapkan untuk ${targetUser.email}.`, 'info');
+    }
+
+    setIsEmailModalOpen(false);
 
     return {
       success: true,
-      message: `Tautan perubahan kata sandi berhasil dikirim ke ${targetUser.email}.`,
+      message: `Tautan perubahan kata sandi telah dikirim ke ${targetUser.email}. Periksa kotak masuk atau folder spam Anda.`,
       resetLink,
     };
   };
@@ -1355,8 +1375,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // STORE PROFILE & MASTER DATA ACTIONS
   // =========================================================
   const updateStoreProfile = (newProfile: Partial<StoreProfile>) => {
-    setStoreProfile((prev) => ({ ...prev, ...newProfile }));
-    showToast('Profil toko berhasil diperbarui', 'success');
+    setStoreProfile((prev) => {
+      const updated = { ...prev, ...newProfile };
+      // Also sync currentUser if avatarUrl or owner or business name was updated
+      if (currentUser) {
+        let userUpdated = false;
+        const updatedUser: AuthUser = { ...currentUser };
+        if (newProfile.avatarUrl && newProfile.avatarUrl !== currentUser.avatarUrl) {
+          updatedUser.avatarUrl = newProfile.avatarUrl;
+          userUpdated = true;
+        }
+        if (newProfile.owner && newProfile.owner !== currentUser.fullName) {
+          updatedUser.fullName = newProfile.owner;
+          userUpdated = true;
+        }
+        if (newProfile.name && newProfile.name !== currentUser.businessName) {
+          updatedUser.businessName = newProfile.name;
+          userUpdated = true;
+        }
+        if (userUpdated) {
+          setCurrentUser(updatedUser);
+          try {
+            localStorage.setItem('finansialpro_current_user', JSON.stringify(updatedUser));
+            setRegisteredUsers((prevUsers) =>
+              prevUsers.map((u) => (u.id === updatedUser.id ? updatedUser : u))
+            );
+          } catch {
+            // ignore
+          }
+          saveUserToFirestore(updatedUser).catch((err) =>
+            console.warn('Could not update user avatar in Firestore:', err)
+          );
+        }
+      }
+      return updated;
+    });
+    showToast('Profil toko & foto pemilik berhasil diperbarui', 'success');
   };
 
   const addCategory = (catData: Omit<CategoryItem, 'id' | 'slug'>) => {
@@ -2247,6 +2301,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAutoBackupRunning,
         isPwaInstallModalOpen,
         setIsPwaInstallModalOpen,
+        isEditProfilePhotoModalOpen,
+        setIsEditProfilePhotoModalOpen,
         isAppLocked,
         setIsAppLocked,
         lockDurationMinutes,

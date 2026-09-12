@@ -1,11 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Registered users collection for multi-device sync and single session enforcement
     match /registered_users/{userId} {
       allow read, write: if true;
@@ -14,6 +9,11 @@ service cloud.firestore {
     // Scheduled cloud backup snapshots
     match /scheduled_backups/{backupId} {
       allow read, write: if true;
+    }
+
+    // Default catch-all deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

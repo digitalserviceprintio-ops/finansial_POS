@@ -13,7 +13,6 @@ import {
   Eye,
   EyeOff,
   Sparkles,
-  Inbox,
   AlertCircle,
   AlertTriangle,
   Clock,
@@ -39,9 +38,6 @@ export const AuthView: React.FC = () => {
     loginWithCredentials,
     sendPasswordResetLink,
     resetUserPassword,
-    isEmailModalOpen,
-    setIsEmailModalOpen,
-    latestSimulatedEmail,
     showToast,
   } = useApp();
 
@@ -238,13 +234,12 @@ export const AuthView: React.FC = () => {
   };
 
   // Resend OTP
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
     if (resendTimer > 0) return;
-    const newCode = resendVerificationCode(verifEmail);
+    await resendVerificationCode(verifEmail);
     setResendTimer(60);
     setOtpDigits(['', '', '', '', '', '']);
     setErrorMessage('');
-    showToast(`Kode baru telah dikirimkan ke email ${verifEmail}`, 'info');
   };
 
   // Submit Login with Multi-Device Check
@@ -378,32 +373,6 @@ export const AuthView: React.FC = () => {
       <div className="absolute -bottom-32 left-1/3 w-80 h-80 bg-sky-200/30 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-6xl mx-auto z-10 py-6">
-        {/* Floating simulated email inbox banner if an email was sent */}
-        {latestSimulatedEmail && (
-          <div className="mb-6 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 border border-[#0055EE]/30 shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top-4 duration-200">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 font-bold shrink-0">
-                <Inbox className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-[#1b1b23]">
-                  Email Verifikasi Terkirim ke <span className="text-[#0055EE]">{latestSimulatedEmail.to}</span>
-                </p>
-                <p className="text-[11px] text-[#767680]">
-                  Kode OTP Anda: <strong className="font-mono text-emerald-800 font-extrabold text-xs">{latestSimulatedEmail.code}</strong>
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsEmailModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-[#0055EE] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#0047cc] transition-all shrink-0 cursor-pointer"
-            >
-              <Mail className="h-3.5 w-3.5" />
-              <span>Buka Kotak Masuk</span>
-            </button>
-          </div>
-        )}
-
         {/* 2-Column Split Hero Layout matching user capture */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Column: Cashier Character Hero Illustration & Floating Badges */}
@@ -716,16 +685,17 @@ export const AuthView: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Simulated Email Button Trigger */}
-                <div className="flex justify-center">
-                  <button
-                    type="button"
-                    onClick={() => setIsEmailModalOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#ebeaff] border border-[#d8d6fc] px-4 py-2 text-xs font-bold text-[#4648d4] hover:bg-[#d8d6fc] transition-colors shadow-2xs"
-                  >
-                    <Inbox className="h-4 w-4" />
-                    <span>Lihat Email Masuk (Simulasi Live OTP)</span>
-                  </button>
+                {/* Real Email Delivery Info Box */}
+                <div className="rounded-2xl border border-blue-200/80 bg-blue-50/70 p-3.5 space-y-1.5 text-left">
+                  <div className="flex items-start gap-2.5 text-xs text-blue-900">
+                    <Mail className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-blue-950 block">Periksa Kotak Masuk Email Anda</span>
+                      <p className="text-blue-800 text-[11px] leading-relaxed mt-0.5">
+                        Kode verifikasi telah dikirim langsung ke <strong>{verifEmail}</strong>. Silakan periksa folder <strong>Kotak Masuk (Inbox)</strong> atau folder <strong>Spam / Promosi</strong> jika dalam beberapa saat belum muncul.
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* 6 Digit OTP Input Grid */}
@@ -922,24 +892,16 @@ export const AuthView: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-emerald-200/80">
-                      <button
-                        type="button"
-                        onClick={() => setIsEmailModalOpen(true)}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-3.5 transition-colors cursor-pointer shadow-xs"
-                      >
-                        <Inbox className="h-4 w-4" />
-                        <span>Buka Simulasi Kotak Masuk Email</span>
-                      </button>
+                    <div className="flex gap-2 pt-2 border-t border-emerald-200/80">
                       <button
                         type="button"
                         onClick={() => {
                           setMode('login');
                           setResetSuccessMsg('');
                         }}
-                        className="rounded-xl border border-emerald-300 bg-white hover:bg-emerald-100 text-emerald-900 font-semibold text-xs py-2.5 px-3 transition-colors cursor-pointer text-center"
+                        className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-3 transition-colors cursor-pointer text-center shadow-xs"
                       >
-                        Kembali ke Masuk
+                        Kembali ke Halaman Masuk
                       </button>
                     </div>
                   </div>

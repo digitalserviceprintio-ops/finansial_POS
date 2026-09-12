@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
@@ -422,6 +423,200 @@ app.all('/api/video-download', async (req, res) => {
     console.error('Error downloading video:', error);
     return res.status(500).json({
       error: error?.message || 'Gagal mengunduh file video hasil generasi.',
+    });
+  }
+});
+
+// Check real email service status
+app.get('/api/email-status', (req, res) => {
+  const hasSmtp = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+  const hasResend = Boolean(process.env.RESEND_API_KEY);
+  res.json({
+    configured: hasSmtp || hasResend,
+    provider: hasResend ? 'resend' : hasSmtp ? 'smtp' : 'none',
+    smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+    sender: process.env.SMTP_FROM || process.env.SMTP_USER || 'auth@delpos.id',
+  });
+});
+
+// Real email dispatch endpoint for registration OTP and password reset
+app.post('/api/send-verification-email', async (req, res) => {
+  try {
+    const { email, code, businessName, fullName, type, resetLink } = req.body;
+
+    if (!email || (!code && !resetLink)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Alamat email dan kode verifikasi/tautan reset diperlukan.',
+      });
+    }
+
+    const isReset = type === 'reset_password';
+    const recipientName = fullName || businessName || 'Pelaku Usaha UMKM';
+    const storeName = businessName ? ` - ${businessName}` : '';
+    const subject = isReset
+      ? `[DelPOS] Atur Ulang Kata Sandi Akun${storeName}`
+      : `[DelPOS] Kode Verifikasi Pendaftaran: ${code}`;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f4f5f9; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 560px; width: 100%; background-color: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); overflow: hidden; border: 1px solid #e2e8f0;">
+          <tr>
+            <td style="background: linear-gradient(135deg, #0047cc 0%, #0055EE 60%, #0077FF 100%); padding: 32px 28px; text-align: center;">
+              <div style="display: inline-block; background-color: #ffffff; color: #0055EE; font-weight: 900; font-size: 20px; width: 44px; height: 44px; line-height: 44px; border-radius: 12px; text-align: center; margin-bottom: 12px;">DP</div>
+              <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">DelPOS</h1>
+              <p style="margin: 4px 0 0; color: #bfdbfe; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Sistem Kasir & Pembukuan UMKM</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 36px 32px 28px;">
+              <h2 style="margin: 0 0 12px; font-size: 18px; font-weight: 700; color: #0f172a;">Halo, ${recipientName}</h2>
+              <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #475569;">
+                ${isReset 
+                  ? 'Kami menerima permintaan pengaturan ulang kata sandi untuk akun DelPOS Anda. Klik tombol di bawah ini untuk melanjutkan:' 
+                  : 'Terima kasih telah mendaftar di <strong>DelPOS (microdata2r system)</strong>. Masukkan kode verifikasi 6-digit di bawah ini pada halaman pendaftaran untuk mengonfirmasi email dan mengaktifkan akun kasir Anda:'}
+              </p>
+
+              ${!isReset && code ? `
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 24px 0;">
+                <tr>
+                  <td align="center" style="background-color: #f8fafc; border: 2px dashed #0055EE; border-radius: 16px; padding: 24px 20px;">
+                    <span style="display: block; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">KODE VERIFIKASI RESMI (OTP)</span>
+                    <div style="font-size: 36px; font-weight: 900; font-family: 'Courier New', Courier, monospace; letter-spacing: 8px; color: #0055EE; padding-left: 8px;">${code}</div>
+                    <span style="display: block; font-size: 11px; color: #94a3b8; margin-top: 10px;">Berlaku selama 10 menit</span>
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
+
+              ${isReset && resetLink ? `
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 24px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${resetLink}" target="_blank" style="display: inline-block; background-color: #0055EE; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 14px 28px; border-radius: 12px;">Atur Ulang Kata Sandi</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="font-size: 12px; color: #64748b; word-break: break-all; margin-top: 16px;">
+                Atau salin tautan ini di browser: <br><a href="${resetLink}" style="color: #0055EE;">${resetLink}</a>
+              </p>
+              ` : ''}
+
+              <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 8px; margin-top: 24px;">
+                <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #92400e;">
+                  <strong>Penting:</strong> Jangan berikan kode ini kepada siapapun termasuk pihak yang mengaku sebagai tim DelPOS. Jika Anda tidak merasa melakukan pendaftaran ini, abaikan email ini.
+                </p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 32px; text-align: center;">
+              <p style="margin: 0; font-size: 12px; font-weight: 600; color: #64748b;">DelPOS - Point of Sale & Pembukuan UMKM</p>
+              <p style="margin: 4px 0 0; font-size: 11px; color: #94a3b8;">Email dikirim otomatis oleh sistem DelPOS &bull; Mohon tidak membalas email ini</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const resendApiKey = process.env.RESEND_API_KEY;
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpFrom = process.env.SMTP_FROM || (smtpUser ? `"DelPOS Security" <${smtpUser}>` : '"DelPOS Security" <auth@delpos.id>');
+
+    console.log(`[DelPOS Real Email] Preparing dispatch to ${email} (code: ${code || 'link'})...`);
+
+    // 1. Resend API
+    if (resendApiKey) {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: smtpFrom.includes('<') ? smtpFrom : `DelPOS <${smtpFrom}>`,
+            to: [email],
+            subject,
+            html: htmlContent,
+          }),
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          console.log(`[DelPOS Real Email] Successfully dispatched via Resend to ${email}:`, data.id);
+          return res.json({
+            success: true,
+            configured: true,
+            method: 'resend',
+            messageId: data.id,
+            message: `Email verifikasi berhasil dikirim ke ${email}.`,
+          });
+        }
+      } catch (resendErr) {
+        console.error('[DelPOS Real Email] Resend API error:', resendErr);
+      }
+    }
+
+    // 2. SMTP via nodemailer
+    if (smtpUser && smtpPass) {
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      });
+
+      const info = await transporter.sendMail({
+        from: smtpFrom,
+        to: email,
+        subject,
+        html: htmlContent,
+      });
+
+      console.log(`[DelPOS Real Email] Successfully dispatched via SMTP to ${email}:`, info.messageId);
+      return res.json({
+        success: true,
+        configured: true,
+        method: 'smtp',
+        messageId: info.messageId,
+        message: `Email verifikasi berhasil dikirim ke ${email}.`,
+      });
+    }
+
+    // 3. Fallback when SMTP is not yet set in .env
+    console.warn(`[DelPOS Real Email] SMTP_USER & SMTP_PASS not set in environment. Code for ${email} is ${code}`);
+    return res.status(200).json({
+      success: false,
+      configured: false,
+      error: 'SMTP_NOT_CONFIGURED',
+      message: 'Kredensial email (SMTP_USER dan SMTP_PASS) belum diisi di Secrets/Settings server. Masukkan kredensial SMTP agar email langsung masuk ke inbox penerima.',
+    });
+  } catch (err: any) {
+    console.error('[DelPOS Real Email] Error in /api/send-verification-email:', err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || 'Gagal mengirim email verifikasi.',
     });
   }
 });
