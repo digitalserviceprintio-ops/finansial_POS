@@ -90,9 +90,22 @@ interface AppContextType {
     businessName: string,
     phone: string,
     password?: string
-  ) => Promise<{ success: boolean; code: string; emailSent?: boolean }>;
+  ) => Promise<{
+    success: boolean;
+    code: string;
+    emailSent: boolean;
+    configured: boolean;
+    error?: string;
+    message?: string;
+  }>;
   verifyEmailCode: (email: string, code: string) => { success: boolean; message: string };
-  resendVerificationCode: (email: string) => Promise<string> | string;
+  resendVerificationCode: (email: string) => Promise<{
+    code: string;
+    emailSent: boolean;
+    configured: boolean;
+    error?: string;
+    message?: string;
+  }>;
   sendPasswordResetLink: (email: string) => Promise<{ success: boolean; message: string; resetLink?: string }>;
   resetUserPassword: (email: string, token: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   loginWithCredentials: (
@@ -718,7 +731,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     businessName: string,
     phone: string,
     password?: string
-  ): Promise<{ success: boolean; code: string; emailSent?: boolean }> => {
+  ): Promise<{
+    success: boolean;
+    code: string;
+    emailSent: boolean;
+    configured: boolean;
+    error?: string;
+    message?: string;
+  }> => {
     // Validate password combination if provided
     if (password) {
       const passCheck = validatePassword(password, 8);
@@ -759,7 +779,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (emailResult.success) {
       showToast(`📧 Kode verifikasi resmi telah dikirim ke email ${email}. Periksa kotak masuk Anda!`, 'success');
     } else if (emailResult.configured === false) {
-      showToast(`⚠️ Kredensial SMTP server belum diisi. Kode telah dibuat untuk verifikasi.`, 'warning');
+      showToast(`⚠️ Kredensial SMTP server belum dikonfigurasi. Kode verifikasi ditampilkan di layar.`, 'info');
     } else {
       showToast(`⚠️ Pengiriman email ke ${email} gagal: ${emailResult.error || 'Periksa server SMTP'}`, 'warning');
     }
@@ -767,10 +787,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Do NOT open simulation modal
     setIsEmailModalOpen(false);
 
-    return { success: true, code, emailSent: emailResult.success };
+    return {
+      success: true,
+      code,
+      emailSent: !!emailResult.success,
+      configured: emailResult.configured ?? false,
+      error: emailResult.error,
+      message: emailResult.message,
+    };
   };
 
-  const resendVerificationCode = async (email: string): Promise<string> => {
+  const resendVerificationCode = async (email: string): Promise<{
+    code: string;
+    emailSent: boolean;
+    configured: boolean;
+    error?: string;
+    message?: string;
+  }> => {
     const code = generateOtpCode();
     const expiresAt = Date.now() + 10 * 60 * 1000;
     const existing = pendingVerifications[email.toLowerCase()];
@@ -795,12 +828,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (emailResult.success) {
       showToast(`📧 Kode OTP baru telah dikirimkan ke email ${email}.`, 'success');
+    } else if (emailResult.configured === false) {
+      showToast(`⚠️ Kredensial SMTP server belum aktif. Kode baru ditampilkan di layar.`, 'info');
     } else {
-      showToast(`Kode baru telah di-generate untuk verifikasi ${email}.`, 'info');
+      showToast(`⚠️ Pengiriman email ke ${email} gagal: ${emailResult.error || 'Periksa server SMTP'}`, 'warning');
     }
 
     setIsEmailModalOpen(false);
-    return code;
+    return {
+      code,
+      emailSent: !!emailResult.success,
+      configured: emailResult.configured ?? false,
+      error: emailResult.error,
+      message: emailResult.message,
+    };
   };
 
   const verifyEmailCode = (

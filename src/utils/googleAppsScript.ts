@@ -90,6 +90,20 @@ function doPost(e) {
       performFullSync(ss, payload.data);
       resultMessage = "Seluruh data DelPos berhasil disinkronkan ke Google Sheets.";
     } 
+    else if (action === "SEND_EMAIL_OTP") {
+      var emailData = payload.data || {};
+      if (emailData.email) {
+        var sub = emailData.subject || ("[DelPOS] Kode Verifikasi OTP: " + (emailData.code || ""));
+        MailApp.sendEmail({
+          to: emailData.email,
+          subject: sub,
+          htmlBody: emailData.htmlContent || ("Kode verifikasi DelPOS Anda adalah: " + emailData.code)
+        });
+        resultMessage = "Email OTP berhasil dikirim via Google MailApp ke " + emailData.email;
+      } else {
+        resultMessage = "Alamat email tujuan tidak ditemukan.";
+      }
+    }
     else {
       resultMessage = "Aksi diterima: " + action;
     }

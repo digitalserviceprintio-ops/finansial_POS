@@ -68,6 +68,9 @@ export const AuthView: React.FC = () => {
   const [resendTimer, setResendTimer] = useState(60);
   const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [currentOtpCode, setCurrentOtpCode] = useState<string>('');
+  const [emailDeliveryStatus, setEmailDeliveryStatus] = useState<'sent' | 'unconfigured' | 'failed'>('sent');
+  const [emailDeliveryError, setEmailDeliveryError] = useState<string>('');
 
   // Login Form Data & Multi-Device Conflict State
   const [loginEmail, setLoginEmail] = useState('');
@@ -201,6 +204,15 @@ export const AuthView: React.FC = () => {
 
       if (res.success) {
         setVerifEmail(regEmail.trim());
+        setCurrentOtpCode(res.code);
+        if (res.emailSent) {
+          setEmailDeliveryStatus('sent');
+        } else if (!res.configured) {
+          setEmailDeliveryStatus('unconfigured');
+        } else {
+          setEmailDeliveryStatus('failed');
+        }
+        setEmailDeliveryError(res.error || res.message || '');
         setMode('verify');
         setResendTimer(60);
         setOtpDigits(['', '', '', '', '', '']);
@@ -236,7 +248,16 @@ export const AuthView: React.FC = () => {
   // Resend OTP
   const handleResendOtp = async () => {
     if (resendTimer > 0) return;
-    await resendVerificationCode(verifEmail);
+    const res = await resendVerificationCode(verifEmail);
+    setCurrentOtpCode(res.code);
+    if (res.emailSent) {
+      setEmailDeliveryStatus('sent');
+    } else if (!res.configured) {
+      setEmailDeliveryStatus('unconfigured');
+    } else {
+      setEmailDeliveryStatus('failed');
+    }
+    setEmailDeliveryError(res.error || res.message || '');
     setResendTimer(60);
     setOtpDigits(['', '', '', '', '', '']);
     setErrorMessage('');
@@ -685,18 +706,86 @@ export const AuthView: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Real Email Delivery Info Box */}
-                <div className="rounded-2xl border border-blue-200/80 bg-blue-50/70 p-3.5 space-y-1.5 text-left">
-                  <div className="flex items-start gap-2.5 text-xs text-blue-900">
-                    <Mail className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-blue-950 block">Periksa Kotak Masuk Email Anda</span>
-                      <p className="text-blue-800 text-[11px] leading-relaxed mt-0.5">
-                        Kode verifikasi telah dikirim langsung ke <strong>{verifEmail}</strong>. Silakan periksa folder <strong>Kotak Masuk (Inbox)</strong> atau folder <strong>Spam / Promosi</strong> jika dalam beberapa saat belum muncul.
-                      </p>
+                {/* Dynamic Email Delivery Status & OTP Helper */}
+                {emailDeliveryStatus === 'sent' ? (
+                  <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/80 p-3.5 space-y-1.5 text-left shadow-2xs">
+                    <div className="flex items-start gap-2.5 text-xs text-emerald-950">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-emerald-950 block">Kode Terkirim ke Kotak Masuk!</span>
+                        <p className="text-emerald-800 text-[11px] leading-relaxed mt-0.5">
+                          Kode verifikasi resmi telah dikirim ke <strong>{verifEmail}</strong>. Silakan periksa folder <strong>Kotak Masuk (Inbox)</strong> atau folder <strong>Spam / Promosi</strong>.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-2xl border border-amber-300/90 bg-amber-50/90 p-4 space-y-3 text-left shadow-2xs">
+                    <div className="flex items-start gap-2.5 text-xs text-amber-950">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-200/80 text-amber-900 shrink-0 mt-0.5">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-xs sm:text-sm text-amber-950">
+                            {emailDeliveryStatus === 'unconfigured'
+                              ? 'Kredensial Email Belum Dikonfigurasi'
+                              : 'Pengiriman Email Gagal'}
+                          </span>
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 shrink-0">
+                            {emailDeliveryStatus === 'unconfigured' ? 'SMTP Inaktif' : 'Gagal Kirim'}
+                          </span>
+                        </div>
+                        <p className="text-amber-900 text-[11px] leading-relaxed">
+                          {emailDeliveryStatus === 'unconfigured'
+                            ? `Server cloud belum memiliki akun pengirim (SMTP_USER & SMTP_PASS di Secrets server). Email ke ${verifEmail} belum dapat diteruskan ke inbox.`
+                            : `Pengiriman ke ${verifEmail} mengalami kendala (${emailDeliveryError || 'Koneksi SMTP gagal'}).`}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Active OTP Card for Instant Verification */}
+                    {currentOtpCode && (
+                      <div className="bg-white rounded-xl p-3 border border-amber-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider font-bold text-[#767680] block">Kode OTP Verifikasi Anda</span>
+                          <div className="text-2xl font-black font-mono tracking-widest text-[#4648d4]">{currentOtpCode}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const digits = currentOtpCode.split('').slice(0, 6);
+                            setOtpDigits(digits);
+                            handleVerifyOtp(currentOtpCode);
+                          }}
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#4648d4] hover:bg-[#3435ad] text-white font-bold text-xs px-3.5 py-2.5 transition-all shadow-xs cursor-pointer"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Gunakan Kode & Verifikasi Otomatis</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Collapsible Guidance on Enabling Real SMTP */}
+                    <details className="text-xs text-amber-950 pt-1 group cursor-pointer">
+                      <summary className="font-bold flex items-center gap-1.5 hover:underline text-amber-900 text-[11px]">
+                        <HelpCircle className="h-3.5 w-3.5 text-amber-700" />
+                        <span>Cara Mengaktifkan Pengiriman Email Nyata ke Inbox (Gmail/SMTP)</span>
+                      </summary>
+                      <div className="mt-2 pl-4 space-y-1 text-[11px] text-amber-900 leading-relaxed border-l-2 border-amber-300">
+                        <p>1. Buka <strong>Google Account</strong> &gt; <strong>Keamanan</strong> &gt; Buat <strong>Sandi Aplikasi (App Password)</strong> 16-karakter.</p>
+                        <p>2. Di menu <strong>Settings</strong> AI Studio / Cloud Run, tambahkan environment variable:</p>
+                        <div className="bg-amber-100/90 p-2 rounded-lg font-mono text-[10px] text-amber-950 space-y-0.5 my-1">
+                          <div>SMTP_HOST=smtp.gmail.com</div>
+                          <div>SMTP_PORT=587</div>
+                          <div>SMTP_USER=emailanda@gmail.com</div>
+                          <div>SMTP_PASS=sandiaplikasi16karakter</div>
+                        </div>
+                        <p>3. Setelah disimpan, email OTP verifikasi dan reset kata sandi akan otomatis mendarat di inbox pengguna.</p>
+                      </div>
+                    </details>
+                  </div>
+                )}
 
                 {/* 6 Digit OTP Input Grid */}
                 <div className="space-y-3">

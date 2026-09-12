@@ -15,7 +15,7 @@ export interface SendVerificationEmailParams {
 export interface SendEmailResponse {
   success: boolean;
   configured?: boolean;
-  method?: 'smtp' | 'resend';
+  method?: 'smtp' | 'resend' | 'gas';
   messageId?: string;
   message?: string;
   error?: string;
@@ -23,7 +23,7 @@ export interface SendEmailResponse {
 
 export interface EmailServiceStatus {
   configured: boolean;
-  provider: 'smtp' | 'resend' | 'none';
+  provider: 'smtp' | 'resend' | 'gas' | 'none';
 }
 
 /**
@@ -42,6 +42,41 @@ export async function sendRealVerificationEmail(
     });
 
     const data = (await res.json()) as SendEmailResponse;
+
+    // If server SMTP is not configured, check if client has Google Apps Script webhook configured
+    if (!data.success && data.configured === false && typeof window !== 'undefined') {
+      try {
+        const savedGasConfig = localStorage.getItem('delpos_google_sheets_config');
+        if (savedGasConfig) {
+          const parsed = JSON.parse(savedGasConfig);
+          if (parsed.webAppUrl) {
+            await fetch(parsed.webAppUrl, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                action: 'SEND_EMAIL_OTP',
+                data: {
+                  email: params.email,
+                  code: params.code,
+                  businessName: params.businessName,
+                  subject: `[DelPOS] Kode Verifikasi Pendaftaran: ${params.code}`,
+                },
+              }),
+            });
+            return {
+              success: true,
+              configured: true,
+              method: 'gas',
+              message: `Email verifikasi dikirim via Google Apps Script ke ${params.email}`,
+            };
+          }
+        }
+      } catch (gasErr) {
+        console.warn('[DelPOS] GAS email fallback error:', gasErr);
+      }
+    }
+
     return data;
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Koneksi ke server pengiriman email gagal';
