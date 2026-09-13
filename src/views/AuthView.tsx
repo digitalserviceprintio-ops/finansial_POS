@@ -34,12 +34,13 @@ import { DelPOSLogo } from '../components/brand/DelPOSLogo';
 import { DelPOSFeatureBadges } from '../components/brand/DelPOSFeatureBadges';
 import { AuthHeroIllustration } from '../components/auth/AuthHeroIllustration';
 import { PasswordRequirementGuide } from '../components/auth/PasswordRequirementGuide';
-import { validatePassword } from '../utils/security';
+import { validatePassword, validateEmailAddress } from '../utils/security';
 
 export const AuthView: React.FC = () => {
   const {
     currentUser,
     isAuthenticated,
+    registerDirectly,
     sendWhatsAppOtp,
     resendWhatsAppOtp,
     verifyOtpCode,
@@ -73,6 +74,7 @@ export const AuthView: React.FC = () => {
   const [regPhoneTouched, setRegPhoneTouched] = useState(false);
   const [regPassword, setRegPassword] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(true);
+  const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
 
   // Computed phone regex validation
   const regPhoneValidation = regPhone ? validateIndonesianPhoneNumber(regPhone) : null;
@@ -190,7 +192,7 @@ export const AuthView: React.FC = () => {
     }
   };
 
-  // Submit Registration Form - WhatsApp OTP
+  // Submit Registration Form - Pendaftaran Langsung Aktif (Tanpa perlu OTP WhatsApp)
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
@@ -211,6 +213,17 @@ export const AuthView: React.FC = () => {
       return;
     }
 
+    // Email address is mandatory for SMTP email verification
+    if (!regEmail.trim()) {
+      setErrorMessage('Alamat email wajib diisi untuk verifikasi akun toko Anda melalui server SMTP.');
+      return;
+    }
+    const emailCheck = validateEmailAddress(regEmail);
+    if (!emailCheck.isValid) {
+      setErrorMessage(emailCheck.message || 'Format alamat email tidak valid (contoh: nama@email.com).');
+      return;
+    }
+
     if (!agreeTerms) {
       setErrorMessage('Anda harus menyetujui Syarat dan Ketentuan.');
       return;
@@ -223,28 +236,25 @@ export const AuthView: React.FC = () => {
       return;
     }
 
+    setIsSubmittingRegister(true);
     try {
-      const res = await sendWhatsAppOtp(
-        regPhone.trim(),
-        regFullName.trim(),
-        regBusinessName.trim(),
-        regEmail.trim(),
-        regPassword
-      );
+      const res = await registerDirectly({
+        fullName: regFullName.trim(),
+        businessName: regBusinessName.trim(),
+        phone: regPhone.trim(),
+        email: regEmail.trim(),
+        password: regPassword,
+      });
 
       if (res.success) {
-        setVerifPhone(res.phone);
-        setVerifEmail(regEmail.trim());
-        setCurrentOtpCode(res.code);
-        setWaLink(res.waLink);
-        setWaDispatchedViaApi(res.dispatchedViaApi);
-        setWaApiMessage(res.apiMessage || '');
-        setMode('verify');
-        setResendTimer(60);
-        setOtpDigits(['', '', '', '', '', '']);
+        setErrorMessage('');
+      } else {
+        setErrorMessage(res.message || 'Gagal mendaftarkan akun.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Gagal mengirim kode verifikasi WhatsApp.');
+      setErrorMessage(err.message || 'Gagal mendaftarkan akun. Silakan coba lagi.');
+    } finally {
+      setIsSubmittingRegister(false);
     }
   };
 
@@ -569,9 +579,14 @@ export const AuthView: React.FC = () => {
             {mode === 'register' && (
               <form onSubmit={handleRegisterSubmit} className="space-y-4">
                 <div className="space-y-1">
-                  <h2 className="text-base font-extrabold text-[#1b1b23]">Registrasi Pemilik Usaha Baru</h2>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-extrabold text-[#1b1b23]">Registrasi Pemilik Usaha Baru</h2>
+                    <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                      Verifikasi Email SMTP
+                    </span>
+                  </div>
                   <p className="text-xs text-[#767680]">
-                    Daftarkan usaha Anda untuk mulai mengelola kasir POS, stok barang, dan arus kas otomatis.
+                    Daftarkan usaha Anda. Kode verifikasi 6-digit akan dikirim melalui server SMTP untuk mengonfirmasi email sebelum membuka akses fitur kasir POS.
                   </p>
                 </div>
 
@@ -612,14 +627,14 @@ export const AuthView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Nomor WhatsApp (Untuk Kirim OTP) */}
+                  {/* Nomor WhatsApp (Akun & Kontak Toko) */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-bold text-[#1b1b23]">
-                        Nomor WhatsApp (Tujuan OTP) <span className="text-red-500">*</span>
+                        Nomor WhatsApp / HP <span className="text-red-500">*</span>
                       </label>
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
-                        Via WhatsApp
+                        Login & Kontak
                       </span>
                     </div>
                     <div className="relative">
@@ -661,32 +676,38 @@ export const AuthView: React.FC = () => {
                     ) : regPhone && regPhoneValidation?.isValid ? (
                       <p className="text-[11px] text-emerald-700 font-medium mt-1 flex items-center gap-1">
                         <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                        <span>Nomor WhatsApp valid! OTP akan dikirim ke +{regPhoneValidation?.cleanedPhone}.</span>
+                        <span>Nomor WhatsApp valid (+{regPhoneValidation?.cleanedPhone}).</span>
                       </p>
                     ) : (
                       <p className="text-[10px] text-[#767680] mt-1">
-                        Format valid: harus diawali <strong>08</strong> atau <strong>62</strong> (contoh: 081234567890 / 6281234567890).
+                        Format valid: diawali <strong>08</strong> atau <strong>62</strong> (contoh: 081234567890).
                       </p>
                     )}
                   </div>
 
-                  {/* Email Akun (Opsional) */}
+                  {/* Email Akun (Wajib untuk Verifikasi SMTP) */}
                   <div>
-                    <label className="block text-xs font-bold text-[#1b1b23] mb-1">
-                      Email Akun <span className="text-[11px] font-normal text-[#767680]">(Opsional)</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#1b1b23]">
+                        Email Pemilik Toko <span className="text-red-500">*</span>
+                      </label>
+                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-200">
+                        Verifikasi SMTP
+                      </span>
+                    </div>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
                       <input
                         type="email"
-                        placeholder="nama@email.com (opsional)"
+                        required
+                        placeholder="contoh: pemilik@tokokita.id"
                         value={regEmail}
                         onChange={(e) => setRegEmail(e.target.value)}
                         className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-2.5 pl-10 pr-3 text-xs text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none"
                       />
                     </div>
                     <p className="text-[10px] text-[#767680] mt-1">
-                      Digunakan untuk identitas tambahan atau laporan bisnis.
+                      Kode verifikasi 6-digit akan dikirim ke email ini melalui server SMTP.
                     </p>
                   </div>
 
@@ -737,11 +758,21 @@ export const AuthView: React.FC = () => {
                 <button
                   id="submit-register-btn"
                   type="submit"
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4648d4] py-3.5 text-xs font-bold text-white shadow-md hover:bg-[#3435ad] transition-all active:scale-98"
+                  disabled={isSubmittingRegister}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4648d4] hover:bg-[#393bbd] py-3.5 text-xs sm:text-sm font-extrabold text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all active:scale-98 cursor-pointer disabled:opacity-50"
                 >
-                  <Mail className="h-4 w-4" />
-                  <span>Kirim Kode Verifikasi ke Email</span>
-                  <ArrowRight className="h-4 w-4" />
+                  {isSubmittingRegister ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>Mengirim Kode Verifikasi ke Email...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4" />
+                      <span>Daftar & Kirim Kode Verifikasi Email</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
                 </button>
 
                 {/* Quick Demo Access Alternative */}

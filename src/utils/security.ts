@@ -447,3 +447,18 @@ export function validatePassword(password: string, minLength: number = 8): Passw
     message,
   };
 }
+
+/**
+ * Validates format of email address
+ */
+export function validateEmailAddress(email: string): { isValid: boolean; message?: string } {
+  const safeEmail = (email || '').trim().toLowerCase();
+  if (!safeEmail) {
+    return { isValid: false, message: 'Alamat email wajib diisi untuk verifikasi akun.' };
+  }
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+  if (!emailRegex.test(safeEmail)) {
+    return { isValid: false, message: 'Format alamat email tidak valid (contoh: nama@email.com).' };
+  }
+  return { isValid: true };
+}

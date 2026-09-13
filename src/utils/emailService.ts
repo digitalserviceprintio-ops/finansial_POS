@@ -19,11 +19,15 @@ export interface SendEmailResponse {
   messageId?: string;
   message?: string;
   error?: string;
+  devCode?: string;
 }
 
 export interface EmailServiceStatus {
   configured: boolean;
   provider: 'smtp' | 'resend' | 'gas' | 'none';
+  smtpHost?: string;
+  smtpPort?: number;
+  sender?: string;
 }
 
 /**
@@ -103,5 +107,35 @@ export async function checkEmailServiceStatus(): Promise<EmailServiceStatus> {
     return data;
   } catch {
     return { configured: false, provider: 'none' };
+  }
+}
+
+/**
+ * Test SMTP configuration and optionally send a test message
+ */
+export async function testSmtpConnection(targetEmail?: string): Promise<{
+  success: boolean;
+  configured: boolean;
+  smtpHost?: string;
+  smtpPort?: number;
+  sender?: string;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const res = await fetch('/api/test-smtp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetEmail }),
+    });
+    return await res.json();
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Koneksi ke endpoint test SMTP gagal';
+    return {
+      success: false,
+      configured: false,
+      error: errorMessage,
+      message: 'Gagal menghubungi server pengujian SMTP.',
+    };
   }
 }

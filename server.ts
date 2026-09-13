@@ -435,8 +435,86 @@ app.get('/api/email-status', (req, res) => {
     configured: hasSmtp || hasResend,
     provider: hasResend ? 'resend' : hasSmtp ? 'smtp' : 'none',
     smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+    smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
     sender: process.env.SMTP_FROM || process.env.SMTP_USER || 'auth@delpos.id',
   });
+});
+
+// Test SMTP connection and dispatch test email
+app.post('/api/test-smtp', async (req, res) => {
+  try {
+    const { targetEmail } = req.body;
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpFrom = process.env.SMTP_FROM || (smtpUser ? `"DelPOS Security" <${smtpUser}>` : '"DelPOS Security" <auth@delpos.id>');
+
+    if (!smtpUser || !smtpPass) {
+      return res.status(200).json({
+        success: false,
+        configured: false,
+        error: 'Kredensial SMTP (SMTP_USER dan SMTP_PASS) belum diisi di environment server.',
+        message: 'Kredensial SMTP belum disetel. Tambahkan SMTP_USER dan SMTP_PASS agar email terkirim via server SMTP.',
+      });
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    await transporter.verify();
+
+    if (targetEmail) {
+      await transporter.sendMail({
+        from: smtpFrom,
+        to: targetEmail,
+        subject: '[DelPOS] Tes Server SMTP Berhasil',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e1ec; border-radius: 12px; background: #ffffff;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #4648d4; margin: 0;">DelPOS POS & Kasir</h2>
+              <p style="color: #767680; font-size: 13px;">Uji Coba Konfigurasi Server SMTP</p>
+            </div>
+            <p style="font-size: 14px; color: #1b1b23; line-height: 1.6;">
+              Selamat! Konfigurasi server SMTP Anda terverifikasi berfungsi normal:
+            </p>
+            <div style="background: #f8f9fe; padding: 14px; border-radius: 8px; font-size: 13px; color: #333; margin: 16px 0;">
+              <div><strong>Host SMTP:</strong> ${smtpHost}:${smtpPort}</div>
+              <div><strong>Pengirim Resmi:</strong> ${smtpFrom}</div>
+              <div><strong>Tujuan Uji:</strong> ${targetEmail}</div>
+            </div>
+            <p style="font-size: 13px; color: #46464f;">
+              Email verifikasi pendaftaran pengguna baru dan reset sandi dapat dikirimkan secara otomatis melalui jalur SMTP ini.
+            </p>
+          </div>
+        `,
+      });
+    }
+
+    return res.json({
+      success: true,
+      configured: true,
+      smtpHost,
+      smtpPort,
+      sender: smtpFrom,
+      message: `Koneksi ke server SMTP (${smtpHost}:${smtpPort}) berhasil diverifikasi.` + (targetEmail ? ` Email tes telah dikirim ke ${targetEmail}.` : ''),
+    });
+  } catch (err: any) {
+    console.error('[DelPOS] Test SMTP Error:', err);
+    return res.status(500).json({
+      success: false,
+      configured: false,
+      error: err?.message || 'Gagal terhubung ke server SMTP.',
+      message: `Gagal verifikasi server SMTP: ${err?.message || 'Periksa host, port, user, atau password aplikasi Anda.'}`,
+    });
+  }
 });
 
 // Helper clean phone for WhatsApp
@@ -689,6 +767,7 @@ app.post('/api/send-verification-email', async (req, res) => {
       success: false,
       configured: false,
       error: 'SMTP_NOT_CONFIGURED',
+      devCode: code,
       message: 'Kredensial email (SMTP_USER dan SMTP_PASS) belum diisi di Secrets/Settings server. Masukkan kredensial SMTP agar email langsung masuk ke inbox penerima.',
     });
   } catch (err: any) {

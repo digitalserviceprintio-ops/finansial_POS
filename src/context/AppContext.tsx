@@ -31,13 +31,14 @@ import {
   initialCategories,
   initialCustomerOrders,
 } from '../data/mockData';
-import { SecureVault, generateTenantId, validatePassword } from '../utils/security';
+import { SecureVault, generateTenantId, validatePassword, validateEmailAddress } from '../utils/security';
 import { LicenseManager } from '../utils/licenseManager';
 import { sendPayloadToGoogleAppsScript } from '../utils/googleAppsScript';
 import {
   fetchRegisteredUsersFromFirestore,
   saveUserToFirestore,
   getUserFromFirestoreByEmail,
+  getUserFromFirestoreByPhoneOrEmail,
   setUserActiveSessionInFirestore,
   clearUserActiveSessionInFirestore,
   subscribeToUserSession,
@@ -48,6 +49,7 @@ import {
   sendWhatsAppOtp as sendWhatsAppOtpService,
   cleanWhatsAppNumber,
   formatDisplayPhone,
+  validateIndonesianPhoneNumber,
 } from '../utils/whatsappService';
 import {
   uploadBackupToGoogleDrive,
@@ -89,6 +91,13 @@ interface AppContextType {
   currentUser: AuthUser | null;
   isAuthenticated: boolean;
   registeredUsers: AuthUser[];
+  registerDirectly: (params: {
+    fullName: string;
+    businessName: string;
+    phone: string;
+    email?: string;
+    password?: string;
+  }) => Promise<{ success: boolean; message: string; user?: AuthUser }>;
   sendVerificationEmail: (
     email: string,
     fullName: string,
@@ -104,6 +113,16 @@ interface AppContextType {
     message?: string;
   }>;
   verifyEmailCode: (email: string, code: string) => { success: boolean; message: string };
+  confirmEmailVerification: (code: string, emailOverride?: string) => Promise<{ success: boolean; message: string }>;
+  resendVerificationCode: (email: string) => Promise<{
+    code: string;
+    emailSent: boolean;
+    configured: boolean;
+    error?: string;
+    message?: string;
+  }>;
+  updateUserEmail: (newEmail: string) => Promise<{ success: boolean; message: string }>;
+  pendingEmailVerification: { email: string; code: string; expiresAt: number; devCode?: string } | null;
   verifyOtpCode: (identifier: string, code: string) => { success: boolean; message: string };
   sendWhatsAppOtp: (
     phone: string,
@@ -126,13 +145,6 @@ interface AppContextType {
     waLink: string;
     dispatchedViaApi: boolean;
     apiMessage?: string;
-  }>;
-  resendVerificationCode: (email: string) => Promise<{
-    code: string;
-    emailSent: boolean;
-    configured: boolean;
-    error?: string;
-    message?: string;
   }>;
   sendPasswordResetLink: (email: string) => Promise<{ success: boolean; message: string; resetLink?: string }>;
   resetUserPassword: (email: string, token: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
@@ -419,6 +431,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [pendingVerifications, setPendingVerifications] = useState<{
     [email: string]: { code: string; expiresAt: number; userData: Partial<AuthUser> };
   }>({});
+
+  // Pending Email Verification State (persisted so page reload retains verification state)
+  const [pendingEmailVerification, setPendingEmailVerification] = useState<{
+    email: string;
+    code: string;
+    expiresAt: number;
+    devCode?: string;
+  } | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('delpos_pending_email_verification');
+        return saved ? JSON.parse(saved) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   // Simulated Email State
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -1093,11 +1123,395 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: 'Verifikasi nomor WhatsApp berhasil! Selamat datang di DelPOS.' };
   };
 
+  /**
+   * Konfirmasi & verifikasi kode email (6-digit OTP) menggunakan server SMTP
+   */
+  const confirmEmailVerification = async (
+    code: string,
+    emailOverride?: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const targetEmail = (
+      emailOverride ||
+      currentUser?.email ||
+      pendingEmailVerification?.email ||
+      ''
+    ).trim().toLowerCase();
+
+    if (!targetEmail) {
+      return { success: false, message: 'Alamat email tujuan verifikasi tidak ditemukan.' };
+    }
+
+    const trimmedCode = (code || '').trim();
+    if (trimmedCode.length !== 6) {
+      return { success: false, message: 'Harap masukkan 6-digit kode verifikasi lengkap.' };
+    }
+
+    // Check pending in memory or in persistent storage
+    let pending =
+      pendingVerifications[targetEmail] ||
+      (pendingEmailVerification && pendingEmailVerification.email.toLowerCase() === targetEmail
+        ? pendingEmailVerification
+        : null);
+
+    if (!pending && typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('delpos_pending_email_verification');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.email && parsed.email.toLowerCase() === targetEmail) {
+            pending = parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!pending || pending.code !== trimmedCode) {
+      return {
+        success: false,
+        message: 'Kode verifikasi tidak sesuai. Silakan periksa kembali pesan di kotak masuk email Anda.',
+      };
+    }
+
+    if (Date.now() > pending.expiresAt) {
+      return {
+        success: false,
+        message: 'Kode verifikasi telah kadaluarsa (melebihi 10 menit). Silakan klik "Kirim Ulang Kode".',
+      };
+    }
+
+    // Update active user state to verified
+    const userToVerify = currentUser || (pending as any).userData;
+    const verifiedUser: AuthUser = {
+      ...(userToVerify || {
+        id: `USR-${String(registeredUsers.length + 1).padStart(3, '0')}`,
+        fullName: 'Pemilik Toko',
+        email: targetEmail,
+        phone: '081234567890',
+        businessName: storeProfile.name,
+        role: 'owner',
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+      }),
+      isEmailVerified: true,
+      lastLoginAt: new Date().toISOString(),
+    };
+
+    setCurrentUser(verifiedUser);
+    setRegisteredUsers((prev) => {
+      const exists = prev.some((u) => u.id === verifiedUser.id || u.email.toLowerCase() === targetEmail);
+      if (exists) {
+        return prev.map((u) =>
+          u.id === verifiedUser.id || u.email.toLowerCase() === targetEmail ? verifiedUser : u
+        );
+      }
+      return [verifiedUser, ...prev];
+    });
+
+    try {
+      localStorage.removeItem('delpos_pending_email_verification');
+      localStorage.setItem('finansialpro_current_user', JSON.stringify(verifiedUser));
+      const updatedList = registeredUsers.map((u) =>
+        u.id === verifiedUser.id || u.email.toLowerCase() === targetEmail ? verifiedUser : u
+      );
+      if (!updatedList.some((u) => u.id === verifiedUser.id)) {
+        updatedList.unshift(verifiedUser);
+      }
+      localStorage.setItem('finansialpro_registered_users', JSON.stringify(updatedList));
+    } catch {
+      // ignore
+    }
+
+    setPendingEmailVerification(null);
+    setPendingVerifications((prev) => {
+      const copy = { ...prev };
+      delete copy[targetEmail];
+      return copy;
+    });
+
+    // Sync verified state to Firestore
+    saveUserToFirestore(verifiedUser).catch((err) =>
+      console.warn('Could not save verified user to Firestore:', err)
+    );
+
+    showToast(
+      '🎉 Email berhasil diverifikasi! Selamat datang di DelPOS, semua fitur kasir POS kini dapat diakses.',
+      'success'
+    );
+    setCurrentTab('dashboard');
+
+    return {
+      success: true,
+      message: 'Email berhasil dikonfirmasi! Akses fitur POS dibuka.',
+    };
+  };
+
   const verifyEmailCode = (
     email: string,
     code: string
   ): { success: boolean; message: string } => {
-    return verifyOtpCode(email, code);
+    confirmEmailVerification(code, email);
+    return { success: true, message: 'Memproses verifikasi email...' };
+  };
+
+  /**
+   * Mengubah alamat email akun (jika pengguna salah ketik saat mendaftar)
+   */
+  const updateUserEmail = async (
+    newEmail: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const val = validateEmailAddress(newEmail);
+    if (!val.isValid) {
+      return { success: false, message: val.message || 'Format alamat email tidak valid.' };
+    }
+    const cleanEmail = newEmail.trim().toLowerCase();
+
+    // Pastikan belum dipakai oleh akun lain
+    const taken = registeredUsers.some(
+      (u) => u.email.toLowerCase() === cleanEmail && u.id !== currentUser?.id
+    );
+    if (taken) {
+      return { success: false, message: 'Alamat email ini sudah digunakan oleh akun terdaftar lainnya.' };
+    }
+
+    if (currentUser) {
+      const updated: AuthUser = {
+        ...currentUser,
+        email: cleanEmail,
+        isEmailVerified: false,
+      };
+      setCurrentUser(updated);
+      setRegisteredUsers((prev) =>
+        prev.map((u) => (u.id === updated.id ? updated : u))
+      );
+      try {
+        localStorage.setItem('finansialpro_current_user', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      saveUserToFirestore(updated).catch(console.warn);
+    }
+
+    // Generate kode baru dan kirim via SMTP
+    const code = generateOtpCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const pendingData = {
+      email: cleanEmail,
+      code,
+      expiresAt,
+    };
+    setPendingEmailVerification(pendingData);
+    try {
+      localStorage.setItem('delpos_pending_email_verification', JSON.stringify(pendingData));
+    } catch {
+      // ignore
+    }
+
+    setPendingVerifications((prev) => ({
+      ...prev,
+      [cleanEmail]: {
+        code,
+        expiresAt,
+        userData: currentUser ? { ...currentUser, email: cleanEmail } : {},
+      },
+    }));
+
+    const emailResult = await sendRealVerificationEmail({
+      email: cleanEmail,
+      code,
+      businessName: currentUser?.businessName || storeProfile.name,
+      fullName: currentUser?.fullName || storeProfile.owner,
+      type: 'register',
+    });
+
+    if (emailResult.success) {
+      showToast(
+        `📧 Alamat email diperbarui ke ${cleanEmail}. Kode verifikasi baru dikirim via SMTP.`,
+        'success'
+      );
+    } else if (emailResult.configured === false) {
+      showToast(
+        `Alamat email diperbarui ke ${cleanEmail}. Kredensial SMTP belum terpasang di server.`,
+        'info'
+      );
+    } else {
+      showToast(
+        `⚠️ Alamat email diperbarui, namun pengiriman email gagal: ${emailResult.error || 'Periksa server SMTP'}`,
+        'warning'
+      );
+    }
+
+    return {
+      success: true,
+      message: `Alamat email berhasil diubah ke ${cleanEmail}. Kode baru telah dikirim.`,
+    };
+  };
+
+  /**
+   * Pendaftaran akun toko baru dengan kewajiban verifikasi email via server SMTP
+   */
+  const registerDirectly = async (params: {
+    fullName: string;
+    businessName: string;
+    phone: string;
+    email?: string;
+    password?: string;
+  }): Promise<{ success: boolean; message: string; user?: AuthUser; code?: string }> => {
+    // 1. Validasi Nama dan Toko
+    if (!params.fullName.trim() || !params.businessName.trim()) {
+      throw new Error('Nama Lengkap dan Nama Usaha / Toko wajib diisi.');
+    }
+
+    // 2. Validasi Nomor WhatsApp
+    const phoneCheck = validateIndonesianPhoneNumber(params.phone);
+    if (!phoneCheck.isValid) {
+      throw new Error(phoneCheck.message || 'Nomor WhatsApp tidak valid. Format harus diawali dengan 08 atau 62.');
+    }
+    const cleanPhone = cleanWhatsAppNumber(params.phone);
+
+    // 3. Validasi Email Wajib untuk Verifikasi SMTP
+    if (!params.email || !params.email.trim()) {
+      throw new Error('Alamat email wajib diisi untuk verifikasi akun toko Anda via SMTP.');
+    }
+    const emailCheck = validateEmailAddress(params.email);
+    if (!emailCheck.isValid) {
+      throw new Error(emailCheck.message || 'Format alamat email tidak valid (contoh: nama@email.com).');
+    }
+    const userEmail = params.email.trim().toLowerCase();
+
+    // 4. Validasi Kata Sandi
+    if (params.password) {
+      const passCheck = validatePassword(params.password, 8);
+      if (!passCheck.isValid) {
+        throw new Error(passCheck.message || 'Kata sandi harus mengandung kombinasi huruf besar, kecil, angka, dan karakter.');
+      }
+    }
+
+    // 5. Cek apakah nomor telepon atau email sudah terdaftar sebelumnya
+    const existingUser = registeredUsers.find(
+      (u) =>
+        (cleanPhone && cleanWhatsAppNumber(u.phone) === cleanPhone) ||
+        (u.email && u.email.toLowerCase() === userEmail)
+    );
+    if (existingUser) {
+      throw new Error('Nomor WhatsApp atau Email sudah terdaftar. Silakan masuk (login) ke akun Anda.');
+    }
+
+    // 6. Generate 6-digit verification code & set 10 minutes expiry
+    const code = generateOtpCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+
+    // Register current device session
+    const currentDev = getCurrentDeviceInfo();
+    const newSession: DeviceSession = {
+      deviceId: currentDev.deviceId,
+      deviceName: currentDev.deviceName,
+      loggedInAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      isActive: true,
+    };
+
+    const newUserId = `USR-${String(registeredUsers.length + 1).padStart(3, '0')}`;
+
+    // Akun baru dibuat dengan isEmailVerified: false (harus konfirmasi email sebelum buka POS)
+    const newUser: AuthUser = {
+      id: newUserId,
+      fullName: params.fullName.trim(),
+      email: userEmail,
+      phone: cleanPhone,
+      businessName: params.businessName.trim(),
+      role: 'owner',
+      isEmailVerified: false,
+      avatarUrl:
+        'https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_UeVtMqix0sJCZHs2TtKM5-d72Pea84EAktZj50a8963OhMvLReqs1NHQ5_GHU31yQIOvnrJgSfVJ_GeiKlPatJEFijCOybVvFFiMGK5NOxgk9QrAVW_iXOt0iW_JoPaZYQPCnyP7yXiRGmSsKfKm7wGSICkKlm5wlq8E4GuzgUAsgAUa1swPQ-m8CDYgnJ9jjXFUt_9CTSEQH_yEVGaOFNO6eA39ylX7lz2CTC7oAh5YPsc0Mc',
+      password: params.password || 'admin123',
+      pinCode: '123456',
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+      activeSession: newSession,
+    };
+
+    // 7. Kirim email verifikasi asli via server SMTP yang telah dikonfigurasi
+    const emailResult = await sendRealVerificationEmail({
+      email: userEmail,
+      code,
+      businessName: params.businessName.trim(),
+      fullName: params.fullName.trim(),
+      type: 'register',
+    });
+
+    const pendingData = {
+      email: userEmail,
+      code,
+      expiresAt,
+      devCode: emailResult.devCode || (emailResult.configured === false ? code : undefined),
+    };
+
+    setPendingEmailVerification(pendingData);
+    try {
+      localStorage.setItem('delpos_pending_email_verification', JSON.stringify(pendingData));
+    } catch {
+      // ignore
+    }
+
+    setPendingVerifications((prev) => ({
+      ...prev,
+      [userEmail]: {
+        code,
+        expiresAt,
+        userData: newUser,
+      },
+    }));
+
+    // Update store profile with business name, owner, and phone
+    setStoreProfile((prev) => ({
+      ...prev,
+      name: params.businessName.trim() || prev.name,
+      owner: params.fullName.trim() || prev.owner,
+      phone: cleanPhone || prev.phone,
+    }));
+
+    setCashierName(newUser.fullName);
+    setRegisteredUsers((prev) => [newUser, ...prev]);
+
+    try {
+      localStorage.removeItem('finansialpro_logged_out');
+      localStorage.setItem('finansialpro_current_user', JSON.stringify(newUser));
+    } catch {
+      // ignore
+    }
+
+    // Set user as current user (with isEmailVerified: false)
+    setCurrentUser(newUser);
+
+    // Persist to Firestore asynchronously
+    saveUserToFirestore(newUser).catch((err) => console.warn('Could not save user to Firestore:', err));
+    setUserActiveSessionInFirestore(userEmail, newSession).catch((err) => console.warn('Could not set session in Firestore:', err));
+
+    if (emailResult.success) {
+      showToast(
+        `📧 Kode verifikasi email berhasil dikirim via server SMTP ke ${userEmail}. Silakan konfirmasi untuk membuka akses fitur POS.`,
+        'success'
+      );
+    } else if (emailResult.configured === false) {
+      showToast(
+        `📧 Pendaftaran berhasil! Silakan masukkan kode verifikasi email untuk membuka akses fitur POS.`,
+        'info'
+      );
+    } else {
+      showToast(
+        `⚠️ Pendaftaran berhasil, namun email gagal terkirim: ${emailResult.error || 'Periksa server SMTP'}. Anda dapat meminta kirim ulang kode.`,
+        'warning'
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Pendaftaran berhasil. Silakan konfirmasi email Anda.',
+      user: newUser,
+      code,
+    };
   };
 
   // Pending Password Resets
@@ -1260,7 +1674,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 1. Fetch latest user doc from Cloud Firestore for cross-device support
     let targetUser: AuthUser | null = null;
     try {
-      targetUser = await getUserFromFirestoreByEmail(emailKey);
+      targetUser = await getUserFromFirestoreByPhoneOrEmail(emailKey);
     } catch (err) {
       console.warn('Could not retrieve user from Firestore, checking local storage:', err);
     }
@@ -1277,7 +1691,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!targetUser) {
       return {
         success: false,
-        message: 'Akun dengan email ini belum terdaftar di perangkat manapun. Silakan lakukan pendaftaran terlebih dahulu.',
+        message: 'Akun dengan email atau nomor WhatsApp ini belum terdaftar. Silakan lakukan pendaftaran terlebih dahulu.',
       };
     }
 
@@ -2434,8 +2848,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentDeviceInfo,
         isAuthenticated: !!currentUser,
         registeredUsers,
+        registerDirectly,
         sendVerificationEmail,
         verifyEmailCode,
+        confirmEmailVerification,
+        updateUserEmail,
+        pendingEmailVerification,
         verifyOtpCode,
         sendWhatsAppOtp,
         resendWhatsAppOtp,

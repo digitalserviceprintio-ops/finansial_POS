@@ -36,8 +36,12 @@ import {
   LogOut,
   Camera,
   FolderOpen,
+  Mail,
+  Server,
+  AlertCircle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { checkEmailServiceStatus, testSmtpConnection, EmailServiceStatus } from '../utils/emailService';
 import {
   bluetoothPrinter,
   BluetoothPrinterState,
@@ -112,6 +116,40 @@ export const SettingsView: React.FC = () => {
   const [activationKeyInput, setActivationKeyInput] = useState('');
   const [isActivating, setIsActivating] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
+
+  // SMTP Server & Email Verification State
+  const [smtpStatus, setSmtpStatus] = useState<EmailServiceStatus | null>(null);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+  const [testEmailTarget, setTestEmailTarget] = useState(currentUser?.email || '');
+  const [smtpTestResult, setSmtpTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    checkEmailServiceStatus().then((status) => setSmtpStatus(status));
+  }, []);
+
+  const handleTestSmtp = async () => {
+    setIsTestingSmtp(true);
+    setSmtpTestResult(null);
+    try {
+      const res = await testSmtpConnection(testEmailTarget.trim() || undefined);
+      setSmtpTestResult({
+        success: res.success,
+        message: res.message || (res.success ? 'Koneksi SMTP berhasil diverifikasi.' : 'Koneksi SMTP gagal.'),
+      });
+      if (res.success) {
+        showToast('Koneksi server SMTP berhasil diverifikasi!', 'success');
+      } else {
+        showToast(res.message || 'Gagal terhubung ke SMTP.', 'warning');
+      }
+    } catch {
+      setSmtpTestResult({
+        success: false,
+        message: 'Gagal menghubungi endpoint tes SMTP.',
+      });
+    } finally {
+      setIsTestingSmtp(false);
+    }
+  };
 
   const handleActivateLicense = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1061,6 +1099,128 @@ export const SettingsView: React.FC = () => {
                 Saat layar terkunci, kasir atau admin harus memasukkan <strong>Password Akun</strong> atau <strong>PIN Kasir (Bawaan: 123456)</strong> untuk melanjutkan transaksi POS.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Server Email SMTP & Verifikasi Akun */}
+        <div className="bg-white p-6 rounded-3xl border border-indigo-200/80 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#f3f2fa]">
+            <div className="flex items-center gap-3.5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-[#4648d4] border border-indigo-100 shrink-0">
+                <Mail className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-extrabold text-[#1b1b23]">
+                    Server Email & SMTP Otentikasi
+                  </h3>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    smtpStatus?.configured
+                      ? 'text-emerald-800 bg-emerald-100 border border-emerald-200'
+                      : 'text-indigo-800 bg-indigo-50 border border-indigo-200'
+                  }`}>
+                    {smtpStatus?.configured ? 'SMTP Aktif' : 'Simulasi / Fallback Aktif'}
+                  </span>
+                </div>
+                <p className="text-xs text-[#767680] mt-0.5">
+                  Server SMTP digunakan untuk mengirim kode verifikasi pendaftaran email 6-digit dan pemulihan akun kasir.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                currentUser?.isEmailVerified
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>{currentUser?.isEmailVerified ? 'Email Terverifikasi' : 'Email Belum Diverifikasi'}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* SMTP Parameters Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="p-3.5 rounded-2xl bg-[#fcf8ff] border border-[#e2e1ec]">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#767680] block mb-1">
+                Host Server SMTP
+              </span>
+              <span className="font-mono font-bold text-xs text-[#1b1b23] flex items-center gap-1.5">
+                <Server className="h-3.5 w-3.5 text-[#4648d4]" />
+                {smtpStatus?.smtpHost || 'smtp.gmail.com'}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#fcf8ff] border border-[#e2e1ec]">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#767680] block mb-1">
+                Port & Keamanan
+              </span>
+              <span className="font-mono font-bold text-xs text-[#1b1b23]">
+                Port {smtpStatus?.smtpPort || 587} (STARTTLS / TLS)
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#fcf8ff] border border-[#e2e1ec]">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#767680] block mb-1">
+                Nama Pengirim Resmi
+              </span>
+              <span className="font-bold text-xs text-[#1b1b23] truncate block" title={smtpStatus?.sender}>
+                {smtpStatus?.sender || 'DelPOS Security <auth@delpos.id>'}
+              </span>
+            </div>
+          </div>
+
+          {/* Test SMTP Dispatch */}
+          <div className="pt-2 border-t border-[#f3f2fa]">
+            <label className="block text-xs font-bold text-[#1b1b23] mb-2">
+              Uji Coba Pengiriman Email Server SMTP
+            </label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
+                <input
+                  type="email"
+                  placeholder="Ketik email penerima untuk tes..."
+                  value={testEmailTarget}
+                  onChange={(e) => setTestEmailTarget(e.target.value)}
+                  className="w-full rounded-xl border border-[#d2d1dc] bg-[#fcf8ff] py-2 pl-10 pr-3 text-xs text-[#1b1b23] focus:border-[#4648d4] focus:bg-white focus:outline-none"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleTestSmtp}
+                disabled={isTestingSmtp}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#4648d4] hover:bg-[#3435ad] px-4 py-2 text-xs font-bold text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap"
+              >
+                {isTestingSmtp ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Menguji Koneksi...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>Uji Koneksi Server SMTP</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {smtpTestResult && (
+              <div className={`mt-3 p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in duration-150 ${
+                smtpTestResult.success
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-red-50 border-red-200 text-red-800'
+              }`}>
+                {smtpTestResult.success ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                )}
+                <span>{smtpTestResult.message}</span>
+              </div>
+            )}
           </div>
         </div>
 

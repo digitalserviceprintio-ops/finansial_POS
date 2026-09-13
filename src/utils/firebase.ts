@@ -180,6 +180,29 @@ export async function getUserFromFirestoreByEmail(email: string): Promise<AuthUs
 }
 
 /**
+ * Get specific user from Firestore by phone or email
+ */
+export async function getUserFromFirestoreByPhoneOrEmail(identifier: string): Promise<AuthUser | null> {
+  const cleanPhone = (identifier || '').replace(/[^0-9]/g, '');
+  const emailMatch = await getUserFromFirestoreByEmail(identifier);
+  if (emailMatch) return emailMatch;
+
+  const all = await fetchRegisteredUsersFromFirestore();
+  if (all && all.length > 0) {
+    return (
+      all.find((u) => {
+        const uPhoneClean = (u.phone || '').replace(/[^0-9]/g, '');
+        return (
+          u.email.toLowerCase() === identifier.toLowerCase().trim() ||
+          (cleanPhone.length >= 8 && uPhoneClean.includes(cleanPhone.slice(-8)))
+        );
+      }) || null
+    );
+  }
+  return null;
+}
+
+/**
  * Update active device session for a user in Firestore
  */
 export async function setUserActiveSessionInFirestore(

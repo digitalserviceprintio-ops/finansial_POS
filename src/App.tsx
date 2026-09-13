@@ -19,6 +19,7 @@ import { AboutView } from './views/AboutView';
 import { SettingsView } from './views/SettingsView';
 import { BackupView } from './views/BackupView';
 import { AuthView } from './views/AuthView';
+import { VerifyEmailView } from './views/VerifyEmailView';
 import { SuperAdminView } from './views/SuperAdminView';
 import { OrdersQueueView } from './views/OrdersQueueView';
 import { CustomerCatalogView } from './views/CustomerCatalogView';
@@ -134,6 +135,16 @@ const MainAppContent: React.FC = () => {
     return (
       <>
         <AuthView />
+        <ToastContainer />
+      </>
+    );
+  }
+
+  // If user has not verified their email, enforce verification before accessing POS features
+  if (!currentUser.isEmailVerified) {
+    return (
+      <>
+        <VerifyEmailView />
         <ToastContainer />
       </>
     );
