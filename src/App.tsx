@@ -23,6 +23,7 @@ import { SuperAdminView } from './views/SuperAdminView';
 import { OrdersQueueView } from './views/OrdersQueueView';
 import { CustomerCatalogView } from './views/CustomerCatalogView';
 import { GoogleAppsScriptView } from './views/GoogleAppsScriptView';
+import { GmailView } from './views/GmailView';
 
 // Modals
 import { PaymentModal } from './components/modals/PaymentModal';
@@ -192,6 +193,8 @@ const MainAppContent: React.FC = () => {
         return <BackupView />;
       case 'google_apps_script':
         return <GoogleAppsScriptView />;
+      case 'gmail':
+        return <GmailView />;
       case 'about':
         return <AboutView />;
       case 'settings':

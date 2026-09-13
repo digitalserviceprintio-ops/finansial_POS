@@ -18,6 +18,7 @@ import {
   ChefHat,
   QrCode,
   FileSpreadsheet,
+  Mail,
   X,
   Smartphone,
   Download,
@@ -85,6 +86,13 @@ export const Sidebar: React.FC = () => {
       icon: FileSpreadsheet,
       badge: isSheetsConnected ? 'Auto-Sync' : 'Setup',
       badgeColor: isSheetsConnected ? 'bg-emerald-100 text-emerald-800 font-black' : 'bg-amber-100 text-amber-800',
+    },
+    {
+      id: 'gmail',
+      label: 'Integrasi Gmail',
+      icon: Mail,
+      badge: 'Google',
+      badgeColor: 'bg-red-50 text-red-700 border border-red-200 font-bold',
     },
     {
       id: 'transactions',

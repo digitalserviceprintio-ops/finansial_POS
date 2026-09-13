@@ -1,12 +1,11 @@
 {
-  "projectId": "delpos-finance",
-  "appId": "1:518468359483:web:38ced83d3bdf200ebed31e",
-  "apiKey": "AIzaSyBiGptO6aX1uWuCmVGRPu_xjw2WvPooHpo",
-  "authDomain": "delpos-finance.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
-  "storageBucket": "delpos-finance.firebasestorage.app",
-  "messagingSenderId": "518468359483",
-  "measurementId": "",
-  "oAuthClientId": "",
+  "projectId": "gen-lang-client-0661433610",
+  "appId": "1:629856546528:web:389784c795667e20dc6a85",
+  "apiKey": "AIzaSyAGX2CAxqLvjS0E374oODx1Z7jcIR2Z8ag",
+  "authDomain": "gen-lang-client-0661433610.firebaseapp.com",
+  "storageBucket": "gen-lang-client-0661433610.firebasestorage.app",
+  "messagingSenderId": "629856546528",
+  "measurementId": "G-L7WT1MEZMD",
+  "oAuthClientId": "629856546528-6pufjkvf79c9bl1gm1l21eo5gvs125jb.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

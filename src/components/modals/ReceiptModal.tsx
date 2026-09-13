@@ -15,6 +15,7 @@ import {
   Smartphone,
   Settings2,
   Receipt as ReceiptIcon,
+  Mail,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
@@ -31,6 +32,7 @@ export const ReceiptModal: React.FC = () => {
     storeProfile,
     formatCurrency,
     showToast,
+    setCurrentTab,
   } = useApp();
 
   const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm'>('58mm');
@@ -561,7 +563,7 @@ DelPOS • powered by microdata2r system`;
           </div>
 
           {/* Multi-channel Share & Actions */}
-          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[#f3f2fa]">
+          <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-[#f3f2fa]">
             <button
               onClick={handleCopyText}
               className="flex flex-col items-center justify-center gap-1 rounded-xl border border-[#e2e1ec] bg-[#fcf8ff] p-2 text-xs font-semibold text-[#46464f] hover:bg-[#f3f2fa] transition-all"
@@ -578,6 +580,18 @@ DelPOS • powered by microdata2r system`;
             >
               <Send className="h-4 w-4 text-emerald-600" />
               <span className="text-[10px]">WhatsApp</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setIsReceiptModalOpen(false);
+                setCurrentTab('gmail');
+              }}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-red-200 bg-red-50 p-2 text-xs font-semibold text-red-700 hover:bg-red-100 transition-all"
+              title="Kirim Struk via Gmail"
+            >
+              <Mail className="h-4 w-4 text-red-600" />
+              <span className="text-[10px]">Gmail</span>
             </button>
 
             <button

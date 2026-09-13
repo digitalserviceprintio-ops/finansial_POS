@@ -13,6 +13,7 @@ export type MainTab =
   | 'cashflow'
   | 'reports'
   | 'google_apps_script'
+  | 'gmail'
   | 'backup'
   | 'settings'
   | 'about'

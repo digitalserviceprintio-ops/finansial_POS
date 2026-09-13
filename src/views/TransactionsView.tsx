@@ -29,6 +29,7 @@ import {
   Smartphone,
   Share2,
   BarChart3,
+  Mail,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Transaction, PaymentMethod } from '../types';
@@ -1329,6 +1330,18 @@ Terima kasih atas kunjungan Anda!`;
               >
                 <Send className="h-4 w-4 text-emerald-600" />
                 <span>WhatsApp</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCurrentTab('gmail');
+                  setDetailTransaction(null);
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-xs font-bold text-red-700 hover:bg-red-100 transition-all"
+                title="Buka Gmail untuk Kirim Struk"
+              >
+                <Mail className="h-4 w-4 text-red-600" />
+                <span>Gmail</span>
               </button>
 
               <button
