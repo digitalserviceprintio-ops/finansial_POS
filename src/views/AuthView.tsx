@@ -623,19 +623,51 @@ export const AuthView: React.FC = () => {
                       </span>
                     </div>
                     <div className="relative">
-                      <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
+                      <Phone className={`absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 ${
+                        regPhone && regPhoneValidation?.isValid
+                          ? 'text-emerald-600'
+                          : regPhone && (regPhoneTouched || regPhone.length >= 4) && !regPhoneValidation?.isValid
+                          ? 'text-rose-500'
+                          : 'text-[#767680]'
+                      }`} />
                       <input
                         type="tel"
                         required
-                        placeholder="Contoh: 081234567890"
+                        placeholder="Contoh: 081234567890 atau 62812..."
                         value={regPhone}
                         onChange={(e) => setRegPhone(e.target.value)}
-                        className="w-full rounded-xl border border-emerald-300 bg-white py-2.5 pl-10 pr-3 text-xs font-medium text-[#1b1b23] focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                        onBlur={() => setRegPhoneTouched(true)}
+                        className={`w-full rounded-xl border py-2.5 pl-10 pr-10 text-xs font-medium focus:outline-none transition-all ${
+                          regPhone && regPhoneValidation?.isValid
+                            ? 'border-emerald-500 bg-emerald-50/20 text-emerald-950 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100'
+                            : regPhone && (regPhoneTouched || regPhone.length >= 4) && !regPhoneValidation?.isValid
+                            ? 'border-rose-400 bg-rose-50/20 text-rose-950 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                            : 'border-[#d2d1dc] bg-[#fcf8ff] text-[#1b1b23] focus:border-[#4648d4] focus:bg-white'
+                        }`}
                       />
+                      {regPhone && regPhoneValidation?.isValid ? (
+                        <CheckCircle2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
+                      ) : regPhone && (regPhoneTouched || regPhone.length >= 4) && !regPhoneValidation?.isValid ? (
+                        <AlertCircle className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-500" />
+                      ) : null}
                     </div>
-                    <p className="text-[10px] text-[#767680] mt-1">
-                      Kode OTP verifikasi 6-digit dikirimkan langsung ke nomor WhatsApp ini.
-                    </p>
+
+                    {/* Live Validation Guidance */}
+                    {regPhone && (regPhoneTouched || regPhone.length >= 4) && !regPhoneValidation?.isValid ? (
+                      <p className="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span>{regPhoneValidation?.message}</span>
+                      </p>
+                    ) : regPhone && regPhoneValidation?.isValid ? (
+                      <p className="text-[11px] text-emerald-700 font-medium mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                        <span>Nomor WhatsApp valid! OTP akan dikirim ke +{regPhoneValidation?.cleanedPhone}.</span>
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-[#767680] mt-1">
+                        Format valid: harus diawali <strong>08</strong> atau <strong>62</strong> (contoh: 081234567890 / 6281234567890).
+                      </p>
+                    )}
                   </div>
 
                   {/* Email Akun (Opsional) */}
