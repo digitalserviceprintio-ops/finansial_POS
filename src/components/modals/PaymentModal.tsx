@@ -68,11 +68,25 @@ export const PaymentModal: React.FC = () => {
     500000,
   ].filter((v, i, a) => v >= total && a.indexOf(v) === i);
 
-  const bankAccounts = storeProfile.bankAccounts || [
-    { bankName: 'BCA', accountNumber: '8830-1928-33', accountHolder: 'BUDI SANTOSO / TOKO 2R' },
-    { bankName: 'BRI', accountNumber: '0206-01-002849-50-8', accountHolder: 'TOKO 2R MAJU BERSAMA' },
-    { bankName: 'Mandiri', accountNumber: '137-00-1982736-1', accountHolder: 'TOKO 2R UMKM' },
-  ];
+  const bankAccounts = (storeProfile.bankAccounts && storeProfile.bankAccounts.length > 0)
+    ? storeProfile.bankAccounts
+    : [
+        { bankName: 'BCA', accountNumber: '8830-1928-33', accountHolder: `${storeProfile.owner || 'BUDI SANTOSO'} / ${storeProfile.name || 'TOKO 2R'}`, isDefault: true },
+        { bankName: 'BRI', accountNumber: '0206-01-002849-50-8', accountHolder: storeProfile.name || 'TOKO 2R MAJU BERSAMA', isDefault: false },
+        { bankName: 'Mandiri', accountNumber: '137-00-1982736-1', accountHolder: storeProfile.name || 'TOKO 2R UMKM', isDefault: false },
+      ];
+
+  // Sync default bank index on modal open
+  useEffect(() => {
+    if (isPaymentModalOpen) {
+      const defaultIdx = bankAccounts.findIndex((acc) => acc.isDefault);
+      if (defaultIdx !== -1) {
+        setSelectedBankIdx(defaultIdx);
+      } else {
+        setSelectedBankIdx(0);
+      }
+    }
+  }, [isPaymentModalOpen, storeProfile.bankAccounts]);
 
   const handleCopyBankAcc = (accNumber: string) => {
     navigator.clipboard.writeText(accNumber.replace(/\D/g, ''));
@@ -279,10 +293,18 @@ export const PaymentModal: React.FC = () => {
                         {acc.bankName.substring(0, 3)}
                       </div>
                       <div>
-                        <p className="text-xs font-black text-[#1b1b23]">
-                          Bank {acc.bankName} - <span className="font-mono">{acc.accountNumber}</span>
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-black text-[#1b1b23]">
+                            Bank {acc.bankName} - <span className="font-mono">{acc.accountNumber}</span>
+                          </p>
+                          {acc.isDefault && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              Utama
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-[#767680] font-semibold">a.n. {acc.accountHolder}</p>
+                        {acc.notes && <p className="text-[9px] text-slate-500 italic mt-0.5">{acc.notes}</p>}
                       </div>
                     </div>
 

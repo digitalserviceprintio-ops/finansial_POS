@@ -7,11 +7,11 @@ import {
   ShieldCheck,
   AlertCircle,
   LogOut,
-  Sparkles,
   KeyRound,
   Store,
   CheckCircle2,
   Clock,
+  ShieldAlert,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DelPOSLogo } from '../brand/DelPOSLogo';
@@ -57,7 +57,7 @@ export const AppLockModal: React.FC = () => {
   const handleUnlock = (pwdToTest?: string) => {
     const password = pwdToTest !== undefined ? pwdToTest : passwordInput;
     if (!password.trim()) {
-      setErrorMsg('Masukkan password atau PIN kasir');
+      setErrorMsg('Masukkan password akun login kasir atau admin yang terdaftar');
       setShake(true);
       setTimeout(() => setShake(false), 500);
       return;
@@ -67,14 +67,14 @@ export const AppLockModal: React.FC = () => {
     if (result.success) {
       setIsSuccess(true);
       soundManager.playSuccessChime();
-      showToast('Kunci aplikasi berhasil dibuka!', 'success');
+      showToast(result.message || 'Kunci POS berhasil dibuka!', 'success');
       setTimeout(() => {
         setPasswordInput('');
         setErrorMsg('');
         setIsSuccess(false);
       }, 350);
     } else {
-      setErrorMsg(result.message || 'Password atau PIN tidak sesuai');
+      setErrorMsg(result.message || 'Password salah. Masukkan password akun terdaftar.');
       setShake(true);
       setTimeout(() => setShake(false), 500);
       inputRef.current?.focus();
@@ -89,20 +89,12 @@ export const AppLockModal: React.FC = () => {
       setPasswordInput((prev) => prev.slice(0, -1));
       setErrorMsg('');
     } else {
-      if (passwordInput.length < 16) {
+      if (passwordInput.length < 32) {
         const next = passwordInput + val;
         setPasswordInput(next);
         setErrorMsg('');
-        // Auto unlock if 6 digits match pin
-        if (next.length === 6) {
-          setTimeout(() => handleUnlock(next), 100);
-        }
       }
     }
-  };
-
-  const handleQuickUnlockDemo = () => {
-    handleUnlock('123456');
   };
 
   return (
@@ -147,7 +139,7 @@ export const AppLockModal: React.FC = () => {
               Sistem Terkunci Otomatis
             </h2>
             <p className="text-xs text-blue-100 mt-1 max-w-xs mx-auto leading-relaxed">
-              Aplikasi {APP_CONFIG.brand} terkunci karena tidak ada aktivitas selama {lockDurationMinutes} menit. Masukkan password/PIN untuk melanjutkan transaksi.
+              Layar aplikasi terkunci untuk keamanan. Kasir atau admin harus memasukkan Password Akun login yang sudah terdaftar untuk melanjutkan transaksi POS.
             </p>
           </div>
         </div>
@@ -180,7 +172,7 @@ export const AppLockModal: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 truncate mt-0.5">
-                {storeProfile.name || 'Toko UMKM'}
+                {storeProfile.name || 'Toko UMKM'} • {currentUser.email || currentUser.phone}
               </p>
             </div>
           </div>
@@ -199,7 +191,7 @@ export const AppLockModal: React.FC = () => {
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Password / PIN Pengguna</span>
+                  <span>Password Akun Login Terdaftar</span>
                 </label>
                 <button
                   type="button"
@@ -219,7 +211,7 @@ export const AppLockModal: React.FC = () => {
                     setPasswordInput(e.target.value);
                     setErrorMsg('');
                   }}
-                  placeholder="Ketik password atau PIN..."
+                  placeholder="Masukkan password akun terdaftar..."
                   className={`w-full px-4 py-3.5 rounded-2xl border text-sm font-semibold tracking-wider transition-all outline-hidden pr-11 ${
                     errorMsg
                       ? 'border-red-400 bg-red-50/50 text-red-900 focus:ring-2 focus:ring-red-200'
@@ -283,41 +275,34 @@ export const AppLockModal: React.FC = () => {
               {isSuccess ? (
                 <>
                   <CheckCircle2 className="w-4 h-4 text-emerald-300 animate-spin" />
-                  <span>Membuka Akses...</span>
+                  <span>Membuka Akses POS...</span>
                 </>
               ) : (
                 <>
                   <Unlock className="w-4 h-4" />
-                  <span>Buka Kunci Sesi</span>
+                  <span>Buka Kunci Transaksi POS</span>
                 </>
               )}
             </button>
           </form>
 
-          {/* Quick Helper & Demo Pin */}
-          <div className="pt-2 border-t border-slate-100 space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={handleQuickUnlockDemo}
-                className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 flex items-center gap-1 cursor-pointer transition-colors"
-                title="Buka otomatis dengan PIN standar 123456"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Buka Cepat (PIN: 123456)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  logoutUser();
-                }}
-                className="text-[11px] font-bold text-red-600 hover:text-red-700 flex items-center gap-1 cursor-pointer transition-colors"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Ganti Akun Kasir</span>
-              </button>
+          {/* Security Verification Footer */}
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Otentikasi Kasir / Admin</span>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                logoutUser();
+              }}
+              className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Ganti Akun / Logout</span>
+            </button>
           </div>
         </div>
       </div>

@@ -64,19 +64,28 @@ export const initialStoreProfile: StoreProfile = {
   avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCoLtV3Bv2OBXPlq_WrGjzOKb2hx7Pr3DOTjypa8dkEKduOjjWvN91FeXpeuVJDGRacnpFhqLouF2glsjyg154-ONwKg9-AXq2ylnHCQIAwb0pQ9662t3tt1reJkfrz46PuKvm9rTpygmqRrJUs0iC2FvO13DZ8nlMx-0eSm-8yba6zLFIndlcCVnmVfynCOWQHJRodfFxaOXcZ1AmWZ9mFAugAFABkMmuQ6rlyglKy280HkFHaQKc',
   bankAccounts: [
     {
+      id: 'BANK-001',
       bankName: 'BCA',
       accountNumber: '8830-1928-33',
       accountHolder: 'BUDI SANTOSO / TOKO 2R',
+      isDefault: true,
+      notes: 'BCA Prioritas Cabang Melawai',
     },
     {
+      id: 'BANK-002',
       bankName: 'BRI',
       accountNumber: '0206-01-002849-50-8',
       accountHolder: 'TOKO 2R MAJU BERSAMA',
+      isDefault: false,
+      notes: 'BRI BritAma Bisnis',
     },
     {
+      id: 'BANK-003',
       bankName: 'Mandiri',
       accountNumber: '137-00-1928374-1',
       accountHolder: 'BUDI SANTOSO',
+      isDefault: false,
+      notes: 'Rekening Operasional Toko',
     },
   ],
   catalogHeadline: 'Katalog Menu & Produk Segar Pilihan',

@@ -1926,34 +1926,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const unlockApp = (
-    passwordOrPin: string
+    accountPassword: string
   ): { success: boolean; message: string } => {
-    const input = passwordOrPin.trim();
+    const input = accountPassword.trim();
     if (!input) {
-      return { success: false, message: 'Password atau PIN tidak boleh kosong.' };
+      return { success: false, message: 'Password akun login tidak boleh kosong.' };
     }
 
-    // Check against current user's password or pin
-    const userPass = currentUser?.password || '';
-    const userPin = currentUser?.pinCode || '';
+    // Ambil password akun yang sedang aktif
+    const currentPass =
+      currentUser?.password ||
+      registeredUsers.find(
+        (u) =>
+          u.id === currentUser?.id ||
+          (currentUser?.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+          (currentUser?.phone && u.phone === currentUser.phone)
+      )?.password;
 
-    // Universal fallback / master unlock PINs for seamless usage & demo safety
-    const masterPins = ['123456', 'admin123', 'kasir123', '888888', 'password', 'delpos123'];
-
-    const isMatch =
-      (userPass && input.toLowerCase() === userPass.toLowerCase()) ||
-      (userPin && input === userPin) ||
-      masterPins.includes(input.toLowerCase());
-
-    if (isMatch) {
+    // 1. Cek apakah cocok dengan password akun kasir/admin yang sedang aktif
+    if (currentPass && currentPass === input) {
       setIsAppLocked(false);
       setLastActiveTimestamp(Date.now());
-      return { success: true, message: 'Kunci aplikasi berhasil dibuka!' };
+      return {
+        success: true,
+        message: `Kunci POS berhasil dibuka untuk akun ${currentUser?.fullName || 'Pengguna'}!`,
+      };
+    }
+
+    // 2. Cek apakah cocok dengan password akun kasir atau admin terdaftar lainnya di sistem
+    const matchedUser = registeredUsers.find(
+      (u) => u.password && u.password === input
+    );
+
+    if (matchedUser) {
+      setIsAppLocked(false);
+      setLastActiveTimestamp(Date.now());
+      return {
+        success: true,
+        message: `Kunci POS berhasil dibuka dengan otentikasi ${matchedUser.fullName} (${
+          matchedUser.role === 'owner' ? 'Pemilik / Admin' : 'Kasir'
+        })!`,
+      };
     }
 
     return {
       success: false,
-      message: 'Password atau PIN salah. Silakan coba lagi (PIN default: 123456).',
+      message:
+        'Password salah! Masukkan password akun login kasir atau admin yang sudah terdaftar untuk melanjutkan transaksi POS.',
     };
   };
 

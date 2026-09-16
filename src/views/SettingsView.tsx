@@ -39,6 +39,8 @@ import {
   Mail,
   Server,
   AlertCircle,
+  Landmark,
+  CreditCard,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { checkEmailServiceStatus, testSmtpConnection, EmailServiceStatus } from '../utils/emailService';
@@ -50,6 +52,8 @@ import { BluetoothPrinterModal } from '../components/modals/BluetoothPrinterModa
 import { soundManager, requestNativeNotificationPermission, sendBrowserNotification } from '../utils/soundAlert';
 import { DEFAULT_AVATAR_PRESETS, processAvatarImageFile } from '../utils/avatarUtils';
 import { LicenseManager } from '../utils/licenseManager';
+import { StoreBankAccountSettings } from '../components/settings/StoreBankAccountSettings';
+import { StoreBankAccount } from '../types';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -93,6 +97,52 @@ export const SettingsView: React.FC = () => {
       avatarUrl: storeProfile.avatarUrl,
     }));
   }, [storeProfile.avatarUrl]);
+
+  // Bank Accounts State (Pembayaran Transfer POS & Online)
+  const [bankAccounts, setBankAccounts] = useState<StoreBankAccount[]>(() => {
+    return (storeProfile.bankAccounts && storeProfile.bankAccounts.length > 0)
+      ? storeProfile.bankAccounts
+      : [
+          {
+            id: 'BANK-001',
+            bankName: 'BCA',
+            accountNumber: '8830-1928-33',
+            accountHolder: `${storeProfile.owner || 'BUDI SANTOSO'} / ${storeProfile.name || 'TOKO 2R'}`,
+            isDefault: true,
+            notes: 'BCA Prioritas Cabang Melawai',
+          },
+          {
+            id: 'BANK-002',
+            bankName: 'BRI',
+            accountNumber: '0206-01-002849-50-8',
+            accountHolder: storeProfile.name || 'TOKO 2R MAJU BERSAMA',
+            isDefault: false,
+            notes: 'BRI BritAma Bisnis',
+          },
+          {
+            id: 'BANK-003',
+            bankName: 'Mandiri',
+            accountNumber: '137-00-1928374-1',
+            accountHolder: storeProfile.owner || 'BUDI SANTOSO',
+            isDefault: false,
+            notes: 'Rekening Operasional Toko',
+          },
+        ];
+  });
+
+  // Keep bank accounts in sync with storeProfile
+  useEffect(() => {
+    if (storeProfile.bankAccounts && storeProfile.bankAccounts.length > 0) {
+      setBankAccounts(storeProfile.bankAccounts);
+    }
+  }, [storeProfile.bankAccounts]);
+
+  const handleBankAccountsChange = (updatedAccounts: StoreBankAccount[]) => {
+    setBankAccounts(updatedAccounts);
+    updateStoreProfile({
+      bankAccounts: updatedAccounts,
+    });
+  };
 
   const handleAvatarFileUpload = (file: File) => {
     processAvatarImageFile(
@@ -236,9 +286,10 @@ export const SettingsView: React.FC = () => {
       address: formData.address,
       taxRate: formData.taxRate / 100,
       avatarUrl: formData.avatarUrl,
+      bankAccounts: bankAccounts,
     });
     setCashierName(currentCashier);
-    showToast('Pengaturan toko & kasir berhasil disimpan!', 'success');
+    showToast('Pengaturan toko, akun bank transfer, & kasir berhasil disimpan!', 'success');
   };
 
   return (
@@ -250,7 +301,7 @@ export const SettingsView: React.FC = () => {
             Pengaturan Toko & Perangkat Kasir
           </h1>
           <p className="text-xs text-[#767680] mt-0.5">
-            Konfigurasi identitas usaha, printer Bluetooth thermal, tarif pajak, dan cadangan data
+            Konfigurasi identitas usaha, akun bank pembayaran transfer, printer Bluetooth thermal, dan kasir POS
           </p>
         </div>
 
@@ -264,8 +315,50 @@ export const SettingsView: React.FC = () => {
         </button>
       </div>
 
+      {/* Quick Navigation Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+        <a
+          href="#settings-store-identity"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e2e1ec] font-bold text-slate-700 hover:text-indigo-600 hover:border-indigo-300 transition-all shrink-0"
+        >
+          <Store className="h-3.5 w-3.5 text-indigo-600" />
+          <span>Identitas Usaha</span>
+        </a>
+        <a
+          href="#settings-bank-accounts"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 font-extrabold text-indigo-700 hover:bg-indigo-100 transition-all shrink-0"
+        >
+          <Landmark className="h-3.5 w-3.5 text-indigo-600" />
+          <span>Akun Bank Transfer</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-600 text-white font-black">
+            {bankAccounts.length}
+          </span>
+        </a>
+        <a
+          href="#settings-cashier-tax"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e2e1ec] font-bold text-slate-700 hover:text-indigo-600 hover:border-indigo-300 transition-all shrink-0"
+        >
+          <User className="h-3.5 w-3.5 text-indigo-600" />
+          <span>Kasir & Pajak</span>
+        </a>
+        <a
+          href="#settings-printer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e2e1ec] font-bold text-slate-700 hover:text-blue-600 hover:border-blue-300 transition-all shrink-0"
+        >
+          <Bluetooth className="h-3.5 w-3.5 text-blue-600" />
+          <span>Printer Bluetooth</span>
+        </a>
+        <a
+          href="#settings-security-lock"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e2e1ec] font-bold text-slate-700 hover:text-amber-600 hover:border-amber-300 transition-all shrink-0"
+        >
+          <Lock className="h-3.5 w-3.5 text-amber-600" />
+          <span>Kunci Layar (Auto-Lock)</span>
+        </a>
+      </div>
+
       {/* Printer Bluetooth Thermal (ESC/POS) Card */}
-      <div className="bg-gradient-to-br from-blue-50/90 via-[#fcf8ff] to-indigo-50/60 p-6 rounded-3xl border border-blue-200/80 shadow-xs space-y-4">
+      <div id="settings-printer" className="bg-gradient-to-br from-blue-50/90 via-[#fcf8ff] to-indigo-50/60 p-6 rounded-3xl border border-blue-200/80 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md">
@@ -697,7 +790,7 @@ export const SettingsView: React.FC = () => {
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Identitas Toko */}
-        <div className="bg-white p-6 rounded-2xl border border-[#e2e1ec] shadow-xs space-y-4">
+        <div id="settings-store-identity" className="bg-white p-6 rounded-2xl border border-[#e2e1ec] shadow-xs space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-[#f3f2fa]">
             <Store className="h-5 w-5 text-[#4648d4]" />
             <h3 className="text-sm font-bold text-[#1b1b23]">Identitas Usaha UMKM</h3>
@@ -949,8 +1042,17 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
 
+        {/* Pengaturan Akun Bank (Pembayaran Transfer) */}
+        <StoreBankAccountSettings
+          bankAccounts={bankAccounts}
+          onChange={handleBankAccountsChange}
+          storeName={formData.name}
+          storeOwner={formData.owner}
+          showToast={showToast}
+        />
+
         {/* Kasir Shift & Pajak */}
-        <div className="bg-white p-6 rounded-2xl border border-[#e2e1ec] shadow-xs space-y-4">
+        <div id="settings-cashier-tax" className="bg-white p-6 rounded-2xl border border-[#e2e1ec] shadow-xs space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-[#f3f2fa]">
             <User className="h-5 w-5 text-[#4648d4]" />
             <h3 className="text-sm font-bold text-[#1b1b23]">Kasir Aktif & Pajak (POS)</h3>
@@ -1116,7 +1218,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Keamanan & Penguncian Otomatis Kasir (Auto-Lock 10 Menit) */}
-        <div className="bg-white p-6 rounded-3xl border border-amber-200 shadow-xs space-y-4">
+        <div id="settings-security-lock" className="bg-white p-6 rounded-3xl border border-amber-200 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-100">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md">

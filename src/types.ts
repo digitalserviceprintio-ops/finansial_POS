@@ -234,6 +234,15 @@ export interface ExpenseRecord {
   recipient?: string;
 }
 
+export interface StoreBankAccount {
+  id?: string;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  isDefault?: boolean;
+  notes?: string;
+}
+
 export interface StoreProfile {
   name: string;
   branch: string;
@@ -243,11 +252,7 @@ export interface StoreProfile {
   taxRate: number; // 0.1 for 10%
   currencySymbol: string;
   avatarUrl: string;
-  bankAccounts?: {
-    bankName: string;
-    accountNumber: string;
-    accountHolder: string;
-  }[];
+  bankAccounts?: StoreBankAccount[];
   catalogHeadline?: string;
   catalogAnnouncement?: string;
 }

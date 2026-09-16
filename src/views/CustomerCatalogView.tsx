@@ -811,16 +811,26 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({ onBack
                   <span className="text-[11px] font-extrabold text-sky-800">
                     Rekening Toko untuk Pembayaran Transfer:
                   </span>
-                  {(storeProfile.bankAccounts || [
-                    { bankName: 'BCA', accountNumber: '8830-1928-33', accountHolder: 'BUDI SANTOSO / TOKO 2R' },
-                    { bankName: 'BRI', accountNumber: '0206-01-002849-50-8', accountHolder: 'TOKO 2R MAJU BERSAMA' },
-                  ]).map((bank, idx) => (
+                  {((storeProfile.bankAccounts && storeProfile.bankAccounts.length > 0)
+                    ? storeProfile.bankAccounts
+                    : [
+                        { bankName: 'BCA', accountNumber: '8830-1928-33', accountHolder: 'BUDI SANTOSO / TOKO 2R', isDefault: true },
+                        { bankName: 'BRI', accountNumber: '0206-01-002849-50-8', accountHolder: 'TOKO 2R MAJU BERSAMA', isDefault: false },
+                      ]
+                  ).map((bank, idx) => (
                     <div
                       key={idx}
-                      className="bg-white p-2 rounded-xl border border-sky-100 flex items-center justify-between text-xs"
+                      className="bg-white p-2.5 rounded-xl border border-sky-100 flex items-center justify-between text-xs"
                     >
                       <div>
-                        <span className="font-black text-[#1b1b23]">{bank.bankName}</span>: {bank.accountNumber}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-[#1b1b23]">{bank.bankName}</span>: <span className="font-mono font-bold">{bank.accountNumber}</span>
+                          {bank.isDefault && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-sky-100 text-sky-800">
+                              Utama
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-500 font-semibold">a.n. {bank.accountHolder}</p>
                       </div>
                       <button
