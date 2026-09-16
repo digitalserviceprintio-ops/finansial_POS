@@ -7,6 +7,7 @@ import {
   setLogLevel,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   setDoc,
   updateDoc,
@@ -44,6 +45,18 @@ export const db = firestoreInstance;
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export { firebaseConfig };
+
+// Validate Connection to Firestore on boot conforming to Firebase Skill
+export async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+  }
+}
+testConnection();
 
 // Safe connectivity check without forcing disruptive server probes
 export async function testFirestoreConnection(): Promise<boolean> {
@@ -261,4 +274,39 @@ export function subscribeToUserSession(
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
+}
+
+/**
+ * Save scheduled cloud backup snapshot to Firestore
+ */
+export async function saveBackupToFirestore(backupId: string, backupData: Record<string, unknown>): Promise<boolean> {
+  const path = `scheduled_backups/${backupId}`;
+  try {
+    await setDoc(doc(db, 'scheduled_backups', backupId), {
+      ...backupData,
+      savedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return false;
+  }
+}
+
+/**
+ * Fetch scheduled backups list from Firestore
+ */
+export async function fetchBackupsFromFirestore(): Promise<Record<string, unknown>[] | null> {
+  const path = 'scheduled_backups';
+  try {
+    const snap = await getDocs(collection(db, path));
+    const backups: Record<string, unknown>[] = [];
+    snap.forEach((d) => {
+      backups.push({ id: d.id, ...d.data() });
+    });
+    return backups;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return null;
+  }
 }
