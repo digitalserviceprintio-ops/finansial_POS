@@ -777,6 +777,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // =========================================================
+  // AUTOMATIC LICENSE EXPIRATION & H-1 TRIAL NOTIFICATION ENGINE
+  // Integrates with Super Admin Catalog Pricing
+  // =========================================================
+  useEffect(() => {
+    if (!currentLicense) return;
+
+    const now = Date.now();
+    const isLifetime = currentLicense.expiresAt === null;
+    if (isLifetime && currentLicense.status === 'ACTIVE') {
+      setNotifications((prev) => prev.filter((n) => !n.id.startsWith('notif-license-')));
+      return;
+    }
+
+    const isExpired =
+      currentLicense.status === 'EXPIRED' ||
+      (currentLicense.expiresAt !== null && now > currentLicense.expiresAt);
+
+    const daysLeft = currentLicense.expiresAt
+      ? Math.max(0, Math.ceil((currentLicense.expiresAt - now) / (1000 * 60 * 60 * 24)))
+      : null;
+
+    const isTrial = currentLicense.tier === 'TRIAL';
+
+    // Revisi spesifik: untuk TRIAL hanya tampil pada H-1 (daysLeft <= 1) atau saat expired
+    const shouldNotify = isTrial
+      ? isExpired || (daysLeft !== null && daysLeft <= 1)
+      : isExpired || (daysLeft !== null && daysLeft <= 7);
+
+    if (!shouldNotify) {
+      setNotifications((prev) => prev.filter((n) => !n.id.startsWith('notif-license-')));
+      return;
+    }
+
+    const tierPricing = LicenseManager.getTierPricing();
+    const starterPrice = formatCurrency(tierPricing.STARTER);
+    const proPrice = formatCurrency(tierPricing.PRO);
+    const entPrice = formatCurrency(tierPricing.ENTERPRISE);
+
+    const notifId = isTrial
+      ? isExpired
+        ? 'notif-license-trial-expired'
+        : 'notif-license-trial-h1'
+      : isExpired
+      ? 'notif-license-paid-expired'
+      : 'notif-license-paid-expiring';
+
+    const title = isTrial
+      ? isExpired
+        ? 'Masa Uji Coba (Trial) Telah Berakhir'
+        : 'Peringatan H-1: Masa Trial Berakhir Besok!'
+      : isExpired
+      ? `Lisensi ${currentLicense.tier} Telah Kadaluarsa`
+      : `Peringatan Lisensi: Tersisa ${daysLeft} Hari Lagi`;
+
+    const message = isTrial
+      ? isExpired
+        ? `Masa trial gratis telah habis. Paket resmi dari Super Admin: Starter (${starterPrice}), Pro (${proPrice}), Enterprise (${entPrice}). Klik untuk aktivasi.`
+        : `Masa trial gratis tersisa 1 hari lagi (H-1). Pilihan lisensi terdaftar di Super Admin: Starter (${starterPrice}), Pro (${proPrice}), Enterprise (${entPrice}). Klik untuk aktivasi.`
+      : `Masa aktif lisensi ${currentLicense.tier} ${isExpired ? 'telah berakhir' : `tersisa ${daysLeft} hari lagi`}. Segera perpanjang lisensi Anda.`;
+
+    setNotifications((prev) => {
+      const filtered = prev.filter((n) => !n.id.startsWith('notif-license-'));
+      const existing = prev.find((n) => n.id === notifId);
+
+      const licenseNotif: InAppNotification = {
+        id: notifId,
+        type: 'license',
+        title,
+        message,
+        timestamp: existing?.timestamp || Date.now(),
+        isRead: existing?.isRead || false,
+        actionTab: 'settings',
+        urgency: isExpired ? 'critical' : 'warning',
+      };
+
+      return [licenseNotif, ...filtered];
+    });
+  }, [currentLicense]);
+
+  // =========================================================
   // AUTHENTICATION & EMAIL VERIFICATION FLOW
   // =========================================================
   const generateOtpCode = (): string => {
@@ -1746,14 +1826,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     try {
-      await setUserActiveSessionInFirestore(emailKey, newSession);
       await saveUserToFirestore(updatedUser);
+      if (updatedUser.email) {
+        await setUserActiveSessionInFirestore(updatedUser.email, newSession);
+      }
+      if (emailKey && (!updatedUser.email || emailKey !== updatedUser.email.toLowerCase())) {
+        await setUserActiveSessionInFirestore(emailKey, newSession);
+      }
     } catch (err) {
       console.warn('Could not write active session to Firestore:', err);
     }
 
     // Update local state
-    setRegisteredUsers((prev) => [updatedUser, ...prev.filter((u) => u.email.toLowerCase() !== emailKey)]);
+    setRegisteredUsers((prev) => [
+      updatedUser,
+      ...prev.filter(
+        (u) =>
+          u.id !== updatedUser.id &&
+          u.email.toLowerCase() !== updatedUser.email.toLowerCase() &&
+          (!cleanPhone || !u.phone || cleanWhatsAppNumber(u.phone) !== cleanPhone)
+      ),
+    ]);
     try {
       localStorage.removeItem('finansialpro_logged_out');
       localStorage.setItem('finansialpro_current_user', JSON.stringify(updatedUser));

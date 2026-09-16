@@ -97,15 +97,18 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errMsg = error instanceof Error ? error.message : String(error);
   const errCode = (error as { code?: string })?.code;
 
-  // Handle expected offline, network unavailability, or permission restrictions gracefully without crashing
+  // Handle expected offline, network unavailability, missing document, or permission restrictions gracefully without crashing
   if (
     errCode === 'unavailable' ||
     errCode === 'permission-denied' ||
+    errCode === 'not-found' ||
     errMsg.includes('unavailable') ||
     errMsg.includes('offline') ||
     errMsg.includes('Failed to get document') ||
     errMsg.includes('Missing or insufficient permissions') ||
-    errMsg.includes('permission-denied')
+    errMsg.includes('permission-denied') ||
+    errMsg.includes('No document to update') ||
+    errMsg.includes('NOT_FOUND')
   ) {
     console.warn(`Firestore local/offline fallback active: ${operationType} on ${path}. (${errMsg})`);
     return;
@@ -145,7 +148,7 @@ export async function fetchRegisteredUsersFromFirestore(): Promise<AuthUser[] | 
     const users: AuthUser[] = [];
     snap.forEach((d) => {
       const data = d.data() as AuthUser;
-      if (data && data.email && data.id !== 'connection_probe') {
+      if (data && (data.email || data.phone) && data.id !== 'connection_probe') {
         users.push(data);
       }
     });
@@ -160,13 +163,20 @@ export async function fetchRegisteredUsersFromFirestore(): Promise<AuthUser[] | 
  * Save / Update a registered user in Firestore
  */
 export async function saveUserToFirestore(user: AuthUser): Promise<boolean> {
-  const docId = getUserDocId(user.email);
+  const docId = getUserDocId(user.email || user.id);
   const path = `registered_users/${docId}`;
   try {
-    await setDoc(doc(db, 'registered_users', docId), {
+    const payload = {
       ...user,
       updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    };
+    await setDoc(doc(db, 'registered_users', docId), payload, { merge: true });
+
+    // Also index under clean phone number if available for fast multi-device phone login
+    const cleanPhone = (user.phone || '').replace(/[^0-9]/g, '');
+    if (cleanPhone && cleanPhone.length >= 8 && cleanPhone !== docId) {
+      await setDoc(doc(db, 'registered_users', cleanPhone), payload, { merge: true });
+    }
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -200,6 +210,18 @@ export async function getUserFromFirestoreByPhoneOrEmail(identifier: string): Pr
   const emailMatch = await getUserFromFirestoreByEmail(identifier);
   if (emailMatch) return emailMatch;
 
+  // Direct lookup by phone document ID
+  if (cleanPhone) {
+    try {
+      const phoneSnap = await getDoc(doc(db, 'registered_users', cleanPhone));
+      if (phoneSnap.exists()) {
+        return phoneSnap.data() as AuthUser;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const all = await fetchRegisteredUsersFromFirestore();
   if (all && all.length > 0) {
     return (
@@ -217,18 +239,23 @@ export async function getUserFromFirestoreByPhoneOrEmail(identifier: string): Pr
 
 /**
  * Update active device session for a user in Firestore
+ * Uses setDoc with merge: true to avoid "No document to update" error
  */
 export async function setUserActiveSessionInFirestore(
-  email: string,
+  identifier: string,
   session: DeviceSession
 ): Promise<boolean> {
-  const docId = getUserDocId(email);
+  const docId = getUserDocId(identifier);
   const path = `registered_users/${docId}`;
   try {
-    await updateDoc(doc(db, 'registered_users', docId), {
-      activeSession: session,
-      lastLoginAt: new Date().toISOString(),
-    });
+    await setDoc(
+      doc(db, 'registered_users', docId),
+      {
+        activeSession: session,
+        lastLoginAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
@@ -238,14 +265,19 @@ export async function setUserActiveSessionInFirestore(
 
 /**
  * Clear active session on logout
+ * Uses setDoc with merge: true to avoid "No document to update" error
  */
-export async function clearUserActiveSessionInFirestore(email: string): Promise<boolean> {
-  const docId = getUserDocId(email);
+export async function clearUserActiveSessionInFirestore(identifier: string): Promise<boolean> {
+  const docId = getUserDocId(identifier);
   const path = `registered_users/${docId}`;
   try {
-    await updateDoc(doc(db, 'registered_users', docId), {
-      activeSession: null,
-    });
+    await setDoc(
+      doc(db, 'registered_users', docId),
+      {
+        activeSession: null,
+      },
+      { merge: true }
+    );
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Menu,
-  Search,
   Bell,
   ChevronDown,
   Store,
@@ -10,7 +9,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   HardDrive,
-  Mail,
   Bluetooth,
   Package,
   ArrowRight,
@@ -18,12 +16,11 @@ import {
   Trash2,
   Clock,
   Sparkles,
-  ShoppingCart,
-  Zap,
   Smartphone,
-  Download,
   Lock,
   Camera,
+  Key,
+  ShieldAlert,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DigitalClockAndCalendar } from './DigitalClockAndCalendar';
@@ -36,8 +33,6 @@ export const TopHeader: React.FC = () => {
   const {
     isSidebarOpen,
     setIsSidebarOpen,
-    searchGlobalQuery,
-    setSearchGlobalQuery,
     storeProfile,
     cashierName,
     currentUser,
@@ -45,16 +40,12 @@ export const TopHeader: React.FC = () => {
     currentTab,
     setCurrentTab,
     products,
-    cart,
-    transactions,
     logoutUser,
     notifications,
     unreadNotificationCount,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     clearNotifications,
-    deleteNotification,
-    setIsPwaInstallModalOpen,
     isEditProfilePhotoModalOpen,
     setIsEditProfilePhotoModalOpen,
     lockAppNow,
@@ -63,7 +54,6 @@ export const TopHeader: React.FC = () => {
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [notifFilter, setNotifFilter] = useState<'all' | 'stock' | 'system'>('all');
   const [isBtModalOpen, setIsBtModalOpen] = useState(false);
 
@@ -99,148 +89,44 @@ export const TopHeader: React.FC = () => {
   return (
     <>
       <header id="top-header" className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#e2e1ec] bg-white px-2.5 sm:px-4 md:px-6 shadow-xs">
-        {/* Mobile Search Bar Overlay when active */}
-        {isMobileSearchOpen ? (
-          <div className="flex flex-1 items-center gap-2 py-2 animate-in fade-in duration-150">
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
-              <input
-                id="mobile-global-search-input"
-                type="text"
-                autoFocus
-                placeholder="Cari transaksi, produk, laporan..."
-                value={searchGlobalQuery}
-                onChange={(e) => setSearchGlobalQuery(e.target.value)}
-                className="w-full rounded-full border border-[#4648d4] bg-[#fcf8ff] py-2 pl-9 pr-8 text-xs text-[#1b1b23] placeholder-[#767680] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4648d4]/20"
-              />
-              {searchGlobalQuery && (
-                <button
-                  onClick={() => setSearchGlobalQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#767680] hover:text-[#1b1b23] p-1"
-                >
-                  ✕
-                </button>
-              )}
+        {/* Left section: Toggle & Brand */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <button
+            id="toggle-sidebar-btn"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl p-2 text-[#46464f] hover:bg-[#f3f2fa] transition-colors focus:outline-none cursor-pointer"
+            title="Toggle Sidebar"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <DelPOSLogo variant="compact" size="md" showPoweredBy={false} />
+            <div className="hidden lg:block h-5 w-px bg-slate-200" />
+            <div className="hidden sm:block">
+              <p className="text-xs font-black text-[#1b1b23] leading-none truncate max-w-[120px] md:max-w-[180px] lg:max-w-[220px]">
+                {storeProfile.name}
+              </p>
+              <p className="text-[10px] text-[#767680] font-semibold leading-tight mt-0.5 truncate max-w-[120px] md:max-w-[180px] lg:max-w-[220px]">
+                {storeProfile.branch ? `Cabang ${storeProfile.branch}` : APP_CONFIG.tagline}
+              </p>
             </div>
-            <button
-              onClick={() => {
-                setIsMobileSearchOpen(false);
-                setSearchGlobalQuery('');
-              }}
-              className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors shrink-0"
-            >
-              Tutup
-            </button>
           </div>
-        ) : (
-          <>
-            {/* Left section: Toggle & Brand */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <button
-                id="toggle-sidebar-btn"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl p-2 text-[#46464f] hover:bg-[#f3f2fa] transition-colors focus:outline-none cursor-pointer"
-                title="Toggle Sidebar"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-              
-              <div className="flex items-center gap-2 sm:gap-2.5">
-                <DelPOSLogo variant="compact" size="md" showPoweredBy={false} />
-                <div className="hidden lg:block h-5 w-px bg-slate-200" />
-                <div className="hidden sm:block">
-                  <p className="text-xs font-black text-[#1b1b23] leading-none truncate max-w-[120px] md:max-w-[180px] lg:max-w-[220px]">
-                    {storeProfile.name}
-                  </p>
-                  <p className="text-[10px] text-[#767680] font-semibold leading-tight mt-0.5 truncate max-w-[120px] md:max-w-[180px] lg:max-w-[220px]">
-                    {storeProfile.branch ? `Cabang ${storeProfile.branch}` : APP_CONFIG.tagline}
-                  </p>
-                </div>
-              </div>
-            </div>
+        </div>
 
-            {/* Center section: Search Bar (Desktop & Tablet) */}
-            <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-2 sm:mx-3 hidden md:block">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#767680]" />
-                <input
-                  id="global-search-input"
-                  type="text"
-                  placeholder="Cari transaksi, menu, produk..."
-                  value={searchGlobalQuery}
-                  onChange={(e) => setSearchGlobalQuery(e.target.value)}
-                  className="w-full rounded-full border border-[#d2d1dc] bg-[#fcf8ff] py-1.5 sm:py-2 pl-9 pr-8 text-xs text-[#1b1b23] placeholder-[#767680] transition-all focus:border-[#4648d4] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4648d4]/20"
-                />
-                {searchGlobalQuery && (
-                  <button
-                    onClick={() => setSearchGlobalQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#767680] hover:text-[#1b1b23]"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            </div>
+        {/* Right section: Controls, Notifications & Profile */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Real-time Digital Clock & Interactive Calendar */}
+          <DigitalClockAndCalendar />
 
-            {/* Right section: Controls, Notifications & Profile */}
-            <div className="flex items-center gap-1 sm:gap-2">
-              {/* Mobile Search Toggle Button */}
-              <button
-                id="mobile-search-toggle-btn"
-                onClick={() => setIsMobileSearchOpen(true)}
-                className="flex md:hidden h-9 w-9 items-center justify-center rounded-xl p-2 text-[#46464f] hover:bg-[#f3f2fa] transition-colors focus:outline-none"
-                title="Cari Data"
-              >
-                <Search className="h-4 w-4" />
-              </button>
+          {/* Cashier Shift Status Chip (Desktop) */}
+          <div className="hidden lg:flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 border border-emerald-200 text-xs font-medium text-emerald-800 shrink-0">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Kasir: <strong className="font-semibold">{cashierName}</strong></span>
+          </div>
 
-              {/* Akses Cepat Transaksi Penjualan / Kasir POS (F4) */}
-              <button
-                id="header-quick-pos-btn"
-                onClick={() => setCurrentTab('pos')}
-                className={`flex items-center gap-1.5 sm:gap-2 rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                  currentTab === 'pos'
-                    ? 'bg-[#ebeaff] text-[#4648d4] ring-2 ring-[#4648d4]/30'
-                    : 'bg-gradient-to-r from-[#4648d4] to-[#3435ad] text-white hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
-                }`}
-                title="Akses Cepat Transaksi Penjualan / Kasir (F4)"
-              >
-                <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="hidden sm:inline">Kasir</span>
-                <span className="hidden lg:inline">POS</span>
-                {cart.length > 0 && (
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500 text-white">
-                    {cart.reduce((a, c) => a + c.quantity, 0)}
-                  </span>
-                )}
-                <span className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-white/20 text-white">
-                  F4
-                </span>
-              </button>
-
-              {/* Install APK / PWA Standalone App Button */}
-              <button
-                id="header-install-pwa-btn"
-                onClick={() => setIsPwaInstallModalOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/80 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-all shadow-2xs cursor-pointer shrink-0"
-                title="Pasang Aplikasi DelPOS (Android APK & PWA)"
-              >
-                <Smartphone className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600 shrink-0" />
-                <span className="hidden sm:inline">Pasang</span>
-                <span>APK</span>
-              </button>
-
-              {/* Real-time Digital Clock & Interactive Calendar */}
-              <DigitalClockAndCalendar />
-
-              {/* Cashier Shift Status Chip (Desktop) */}
-              <div className="hidden 2xl:flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 border border-emerald-200 text-xs font-medium text-emerald-800 shrink-0">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Kasir: <strong className="font-semibold">{cashierName}</strong></span>
-              </div>
-
-              {/* In-App Notifications Center Popover */}
-              <div className="relative">
+          {/* In-App Notifications Center Popover */}
+          <div className="relative">
                 <button
                   id="notification-bell-btn"
                   onClick={() => {
@@ -353,8 +239,10 @@ export const TopHeader: React.FC = () => {
                           </div>
                         ) : (
                           filteredNotifs.map((notif) => {
+                            const isLicenseAlert = notif.type === 'license';
                             const isStockAlert = notif.type === 'stock_low' || notif.type === 'stock_empty';
                             const isEmpty = notif.type === 'stock_empty';
+                            const isCritical = notif.urgency === 'critical';
 
                             return (
                               <div
@@ -369,14 +257,24 @@ export const TopHeader: React.FC = () => {
 
                                 <div
                                   className={`h-8 w-8 rounded-xl shrink-0 flex items-center justify-center shadow-2xs mt-0.5 ${
-                                    isEmpty
+                                    isLicenseAlert
+                                      ? isCritical
+                                        ? 'bg-rose-100 text-rose-700'
+                                        : 'bg-amber-100 text-amber-700'
+                                      : isEmpty
                                       ? 'bg-rose-100 text-rose-700'
                                       : isStockAlert
                                       ? 'bg-amber-100 text-amber-700'
                                       : 'bg-indigo-100 text-indigo-700'
                                   }`}
                                 >
-                                  {isEmpty ? (
+                                  {isLicenseAlert ? (
+                                    isCritical ? (
+                                      <ShieldAlert className="h-4 w-4 text-rose-600" />
+                                    ) : (
+                                      <Key className="h-4 w-4 text-amber-600" />
+                                    )
+                                  ) : isEmpty ? (
                                     <AlertTriangle className="h-4 w-4 text-rose-600" />
                                   ) : isStockAlert ? (
                                     <Package className="h-4 w-4 text-amber-600" />
@@ -389,14 +287,26 @@ export const TopHeader: React.FC = () => {
                                   <div className="flex items-center gap-1.5 mb-0.5">
                                     <span
                                       className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wide ${
-                                        isEmpty
+                                        isLicenseAlert
+                                          ? isCritical
+                                            ? 'bg-rose-600 text-white'
+                                            : 'bg-amber-500 text-slate-950 font-black'
+                                          : isEmpty
                                           ? 'bg-rose-600 text-white'
                                           : isStockAlert
                                           ? 'bg-amber-500 text-white'
                                           : 'bg-indigo-600 text-white'
                                       }`}
                                     >
-                                      {isEmpty ? 'STOK HABIS' : isStockAlert ? 'MENIPIS' : 'INFO'}
+                                      {isLicenseAlert
+                                        ? isCritical
+                                          ? 'LISENSI EXPIRED'
+                                          : 'TRIAL H-1'
+                                        : isEmpty
+                                        ? 'STOK HABIS'
+                                        : isStockAlert
+                                        ? 'MENIPIS'
+                                        : 'INFO'}
                                     </span>
                                     <h5 className="text-xs font-bold text-slate-900 truncate">
                                       {notif.title}
@@ -585,8 +495,6 @@ export const TopHeader: React.FC = () => {
                 )}
               </div>
             </div>
-          </>
-        )}
       </header>
 
       {/* Global Bluetooth Printer Modal */}

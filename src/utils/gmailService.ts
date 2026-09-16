@@ -1,22 +1,33 @@
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from './firebase';
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
+import { auth, firebaseConfig } from './firebase';
 import { Transaction, StoreProfile } from '../types';
 
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        oauth2?: {
+          initTokenClient: (config: {
+            client_id: string;
+            scope: string;
+            callback: (response: any) => void;
+            error_callback?: (error: any) => void;
+          }) => {
+            requestAccessToken: (overrideConfig?: { prompt?: string }) => void;
+          };
+        };
+      };
+    };
+  }
+}
+
+// Scopes minimized per Least Privilege Principle
 export const GMAIL_SCOPES = [
-  'https://mail.google.com/',
-  'https://www.googleapis.com/auth/gmail.addons.current.action.compose',
-  'https://www.googleapis.com/auth/gmail.addons.current.message.action',
-  'https://www.googleapis.com/auth/gmail.addons.current.message.metadata',
-  'https://www.googleapis.com/auth/gmail.addons.current.message.readonly',
-  'https://www.googleapis.com/auth/gmail.compose',
-  'https://www.googleapis.com/auth/gmail.insert',
-  'https://www.googleapis.com/auth/gmail.labels',
-  'https://www.googleapis.com/auth/gmail.metadata',
-  'https://www.googleapis.com/auth/gmail.modify',
-  'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/gmail.settings.basic',
-  'https://www.googleapis.com/auth/gmail.settings.sharing',
+  'https://www.googleapis.com/auth/gmail.compose',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
 export interface GmailUserProfile {
@@ -59,7 +70,7 @@ function notifyGmailListeners() {
     try {
       listener(currentGmailUser, isConnected);
     } catch (e) {
-      console.error('Gmail auth listener error:', e);
+      console.warn('Gmail auth listener notification:', e);
     }
   });
 }
@@ -100,7 +111,132 @@ export function isGmailConnected(): boolean {
 }
 
 /**
- * Connect to Gmail using Firebase Auth GoogleAuthProvider with all Gmail scopes
+ * Dynamically ensure Google Identity Services client script is ready
+ */
+function loadGsiScript(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && window.google?.accounts?.oauth2) {
+      resolve();
+      return;
+    }
+    const existing = document.getElementById('google-gsi-client');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => resolve());
+      setTimeout(resolve, 1500);
+      return;
+    }
+    if (typeof document !== 'undefined') {
+      const script = document.createElement('script');
+      script.id = 'google-gsi-client';
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => resolve();
+      document.head.appendChild(script);
+      setTimeout(resolve, 2000);
+    } else {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Connect to Gmail via Google Identity Services Token Client
+ */
+async function connectWithGSI(clientId: string): Promise<{
+  success: boolean;
+  user?: GmailUserProfile;
+  error?: string;
+  cancelled?: boolean;
+}> {
+  await loadGsiScript();
+
+  if (!window.google?.accounts?.oauth2) {
+    throw new Error('Google Identity Services SDK tidak dapat dimuat.');
+  }
+
+  return new Promise((resolve) => {
+    try {
+      const tokenClient = window.google!.accounts!.oauth2!.initTokenClient({
+        client_id: clientId,
+        scope: GMAIL_SCOPES.join(' '),
+        callback: async (tokenResponse: any) => {
+          if (tokenResponse.error) {
+            if (tokenResponse.error === 'access_denied') {
+              resolve({
+                success: false,
+                cancelled: true,
+                error: 'Otorisasi akses akun Google dibatalkan.',
+              });
+              return;
+            }
+            resolve({
+              success: false,
+              error: `Otorisasi Google: ${tokenResponse.error_description || tokenResponse.error}`,
+            });
+            return;
+          }
+
+          const accessToken = tokenResponse.access_token;
+          if (!accessToken) {
+            resolve({
+              success: false,
+              error: 'Tidak menerima token otorisasi dari Google.',
+            });
+            return;
+          }
+
+          let profile: GmailUserProfile = {
+            displayName: 'Pengguna Google',
+            email: null,
+            photoURL: null,
+            uid: 'google-oauth-user',
+          };
+
+          try {
+            const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (userRes.ok) {
+              const uData = await userRes.json();
+              profile = {
+                displayName: uData.name || uData.given_name || 'Pengguna Google',
+                email: uData.email || null,
+                photoURL: uData.picture || null,
+                uid: uData.sub || 'google-oauth-user',
+              };
+            }
+          } catch {
+            // Profile userinfo fetch optional fallback
+          }
+
+          cachedGmailAccessToken = accessToken;
+          currentGmailUser = profile;
+          notifyGmailListeners();
+          resolve({ success: true, user: profile });
+        },
+        error_callback: (err: any) => {
+          resolve({
+            success: false,
+            error: err?.message || 'Jendela otorisasi Google ditutup.',
+          });
+        },
+      });
+
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    } catch (err: any) {
+      resolve({
+        success: false,
+        error: err?.message || 'Gagal memulai koneksi Google Identity Services.',
+      });
+    }
+  });
+}
+
+/**
+ * Connect to Gmail using Google Identity Services (GSI) with Firebase Auth fallback
  */
 export async function connectGmail(): Promise<{
   success: boolean;
@@ -108,13 +244,31 @@ export async function connectGmail(): Promise<{
   error?: string;
   cancelled?: boolean;
 }> {
+  // Strategy 1: Google Identity Services (GSI token client)
+  // Highly resilient in iframes because it does not depend on 3rd-party authDomain cookies
+  const oAuthClientId = (firebaseConfig as { oAuthClientId?: string })?.oAuthClientId;
+  if (oAuthClientId && oAuthClientId.trim() !== '') {
+    try {
+      const gsiRes = await connectWithGSI(oAuthClientId.trim());
+      if (gsiRes.success) {
+        return gsiRes;
+      }
+      if (gsiRes.cancelled) {
+        return gsiRes;
+      }
+      console.warn('GSI notice, trying Firebase popup fallback:', gsiRes.error);
+    } catch (gsiErr) {
+      console.warn('GSI invocation fallback:', gsiErr);
+    }
+  }
+
+  // Strategy 2: Firebase Auth GoogleAuthProvider popup
   try {
     const provider = new GoogleAuthProvider();
     GMAIL_SCOPES.forEach((scope) => provider.addScope(scope));
 
     provider.setCustomParameters({
       prompt: 'consent',
-      access_type: 'offline',
     });
 
     const result = await signInWithPopup(auth, provider);
@@ -148,18 +302,30 @@ export async function connectGmail(): Promise<{
       return {
         success: false,
         cancelled: true,
-        error: 'Jendela login Google ditutup sebelum otorisasi selesai.',
+        error: 'Jendela otorisasi Google ditutup sebelum otorisasi selesai.',
       };
     }
 
     if (errorCode === 'auth/popup-blocked' || errorMessage.includes('popup-blocked')) {
       return {
         success: false,
-        error: 'Jendela popup diblokir oleh browser. Harap izinkan popup untuk login dengan akun Google.',
+        error: 'Jendela popup diblokir oleh browser. Harap izinkan jendela popup untuk otorisasi Google.',
       };
     }
 
-    console.error('Error connecting to Gmail:', err);
+    if (
+      errorCode === 'auth/network-request-failed' ||
+      errorMessage.includes('network-request-failed')
+    ) {
+      console.warn('Google Auth popup network restriction in iframe/sandbox environment.');
+      return {
+        success: false,
+        error:
+          'Koneksi Google terhalang oleh proteksi keamanan browser di dalam pratinjau (cookie pihak ketiga diblokir). Silakan buka aplikasi di Tab Baru untuk menghubungkan akun Gmail dengan lancar.',
+      };
+    }
+
+    console.warn('Google Auth notice:', errorCode || errorMessage);
     return {
       success: false,
       error: errorMessage || 'Gagal menghubungkan ke Gmail via Google Auth.',

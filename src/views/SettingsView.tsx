@@ -49,6 +49,7 @@ import {
 import { BluetoothPrinterModal } from '../components/modals/BluetoothPrinterModal';
 import { soundManager, requestNativeNotificationPermission, sendBrowserNotification } from '../utils/soundAlert';
 import { DEFAULT_AVATAR_PRESETS, processAvatarImageFile } from '../utils/avatarUtils';
+import { LicenseManager } from '../utils/licenseManager';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -68,6 +69,7 @@ export const SettingsView: React.FC = () => {
     lockAppNow,
     currentUser,
     logoutUser,
+    formatCurrency,
   } = useApp();
 
   const avatarFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -116,6 +118,17 @@ export const SettingsView: React.FC = () => {
   const [activationKeyInput, setActivationKeyInput] = useState('');
   const [isActivating, setIsActivating] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
+  const [tierPricing, setTierPricing] = useState(() => LicenseManager.getTierPricing());
+
+  // Synchronize tier prices configured in Super Admin dashboard
+  useEffect(() => {
+    const syncPricing = () => {
+      setTierPricing(LicenseManager.getTierPricing());
+    };
+    syncPricing();
+    window.addEventListener('storage', syncPricing);
+    return () => window.removeEventListener('storage', syncPricing);
+  }, []);
 
   // SMTP Server & Email Verification State
   const [smtpStatus, setSmtpStatus] = useState<EmailServiceStatus | null>(null);
@@ -573,6 +586,84 @@ export const SettingsView: React.FC = () => {
               {currentLicense.maxCashiers > 100 ? 'Unlimited Kasir' : `Maks. ${currentLicense.maxCashiers} Kasir`} •{' '}
               {currentLicense.maxProducts > 10000 ? 'Unlimited Produk' : `${currentLicense.maxProducts} Produk`}
             </p>
+          </div>
+        </div>
+
+        {/* Katalog Harga Standar Lisensi (Terintegrasi dari Dashboard Super Admin) */}
+        <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <span>Katalog Pilihan Paket Lisensi Resmi (Super Admin):</span>
+            </span>
+            <span className="text-[10px] text-gray-400">Harga Standar Terkini</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {[
+              {
+                tier: 'STARTER',
+                name: 'Paket Starter',
+                period: '6 Bulan',
+                price: tierPricing.STARTER,
+                cashiers: '2 Kasir',
+                products: '1.000 Produk',
+                popular: false,
+              },
+              {
+                tier: 'PRO',
+                name: 'Paket Pro',
+                period: '1 Tahun',
+                price: tierPricing.PRO,
+                cashiers: '10 Kasir',
+                products: '10.000 Produk',
+                popular: true,
+              },
+              {
+                tier: 'ENTERPRISE',
+                name: 'Paket Enterprise',
+                period: 'Seumur Hidup',
+                price: tierPricing.ENTERPRISE,
+                cashiers: 'Unlimited Kasir',
+                products: 'Unlimited Produk',
+                popular: false,
+              },
+            ].map((pkg) => (
+              <div
+                key={pkg.tier}
+                className={`p-3 rounded-xl border text-xs flex flex-col justify-between ${
+                  pkg.popular
+                    ? 'bg-amber-500/10 border-amber-400/50 text-amber-100 ring-1 ring-amber-400/30'
+                    : 'bg-white/5 border-white/10 text-gray-200'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white">{pkg.name}</span>
+                    <span className="text-[10px] text-gray-400">{pkg.period}</span>
+                  </div>
+                  <p className="text-sm font-black text-amber-300 mt-1">
+                    {formatCurrency(pkg.price)}
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {pkg.cashiers} • {pkg.products}
+                  </p>
+                </div>
+
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(
+                    `Halo Tim Super Admin DelPOS UMKM,\n\nSaya ingin memesan lisensi *${pkg.name}* seharga *${formatCurrency(pkg.price)}* untuk toko *${currentLicense.businessName || storeProfile.name}* (Serial: ${currentLicense.licenseKey}).\n\nMohon petunjuk pembayaran & penerbitan lisensi resmi. Terima kasih.`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2.5 w-full py-1.5 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-[11px] flex items-center justify-center gap-1 transition-all"
+                >
+                  <Phone className="h-3 w-3 text-amber-400" />
+                  <span>Pesan via WA</span>
+                  <ExternalLink className="h-2.5 w-2.5 opacity-60" />
+                </a>
+              </div>
+            ))}
           </div>
         </div>
 

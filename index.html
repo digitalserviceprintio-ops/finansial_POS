@@ -22,6 +22,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
+    <!-- Google Identity Services for Secure Client-Side OAuth -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
     <!-- Intercept & Prevent Benign Sandboxed Vite WebSocket Closed/HMR Warnings -->
     <script>
       (function() {
@@ -36,7 +39,9 @@
              msg.indexOf('Could not reach Cloud Firestore backend') !== -1 ||
              msg.indexOf('@firebase/firestore') !== -1 ||
              msg.indexOf('auth/popup-closed-by-user') !== -1 ||
-             msg.indexOf('auth/cancelled-popup-request') !== -1)
+             msg.indexOf('auth/cancelled-popup-request') !== -1 ||
+             msg.indexOf('auth/network-request-failed') !== -1 ||
+             msg.indexOf('Error connecting to Gmail') !== -1)
           ) {
             return;
           }
@@ -46,7 +51,7 @@
         var isBenignError = function(err) {
           if (!err) return false;
           var msg = typeof err === 'string' ? err : (err.message || err.reason || err.code || '');
-          return /websocket|vite|ws|popup-closed-by-user|cancelled-popup-request/i.test(msg);
+          return /websocket|vite|ws|popup-closed-by-user|cancelled-popup-request|network-request-failed/i.test(msg);
         };
 
         window.addEventListener('unhandledrejection', function(event) {

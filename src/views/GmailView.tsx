@@ -139,11 +139,11 @@ export const GmailView: React.FC = () => {
       if (res.success && res.user) {
         showToast(`Berhasil terhubung ke akun Gmail: ${res.user.email}`, 'success');
       } else if (!res.cancelled) {
-        showToast(res.error || 'Gagal menghubungkan ke Gmail.', 'error');
+        showToast(res.error || 'Gagal menghubungkan ke Gmail.', 'warning');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Terjadi kesalahan otentikasi Google.';
-      showToast(msg, 'error');
+      console.warn('Google auth handling notice:', err);
+      showToast('Otorisasi Google terhenti. Silakan coba lagi atau buka aplikasi di Tab Baru jika browser membatasi iframe.', 'warning');
     } finally {
       setIsConnecting(false);
     }
@@ -370,7 +370,7 @@ export const GmailView: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div>
+            <div className="flex items-center gap-2">
               {/* Official Google Sign-In Button format as required by workspace-integration skill */}
               <button
                 onClick={handleConnect}
@@ -397,6 +397,19 @@ export const GmailView: React.FC = () => {
                 </svg>
                 <span>{isConnecting ? 'Menghubungkan...' : 'Masuk dengan Google (Gmail)'}</span>
               </button>
+
+              {typeof window !== 'undefined' && window.self !== window.top && (
+                <a
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors text-xs font-semibold text-gray-700"
+                  title="Buka aplikasi di tab baru jika peramban membatasi pop-up otentikasi di dalam frame pratinjau"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 text-gray-500" />
+                  <span className="hidden md:inline">Buka Tab Baru</span>
+                </a>
+              )}
             </div>
           )}
         </div>
