@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Download,
@@ -29,12 +29,16 @@ interface ExportAccountingModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultReportType?: AccountingReportType;
+  initialStartDate?: string;
+  initialEndDate?: string;
 }
 
 export const ExportAccountingModal: React.FC<ExportAccountingModalProps> = ({
   isOpen,
   onClose,
   defaultReportType = 'sales_journal',
+  initialStartDate,
+  initialEndDate,
 }) => {
   const {
     storeProfile,
@@ -49,11 +53,26 @@ export const ExportAccountingModal: React.FC<ExportAccountingModalProps> = ({
 
   const [reportType, setReportType] = useState<AccountingReportType>(defaultReportType);
   const [delimiter, setDelimiter] = useState<ExportDelimiter>(';');
-  const [periodPreset, setPeriodPreset] = useState<string>('this_month');
-  const [customStartDate, setCustomStartDate] = useState<string>('');
-  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [periodPreset, setPeriodPreset] = useState<string>(() =>
+    initialStartDate && initialEndDate ? 'custom' : 'this_month'
+  );
+  const [customStartDate, setCustomStartDate] = useState<string>(initialStartDate || '');
+  const [customEndDate, setCustomEndDate] = useState<string>(initialEndDate || '');
   const [isCopied, setIsCopied] = useState(false);
   const [previewTab, setPreviewTab] = useState<'table' | 'raw'>('table');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialStartDate && initialEndDate) {
+        setPeriodPreset('custom');
+        setCustomStartDate(initialStartDate);
+        setCustomEndDate(initialEndDate);
+      }
+      if (defaultReportType) {
+        setReportType(defaultReportType);
+      }
+    }
+  }, [isOpen, initialStartDate, initialEndDate, defaultReportType]);
 
   // Compute actual start & end date based on period preset
   const { startDate, endDate, dateFilterName } = useMemo(() => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   FileText,
@@ -21,12 +21,27 @@ interface ExportPdfModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialReportType?: 'all_summary' | 'cashflow' | 'profit_loss' | 'product_sales';
+  initialStartDate?: string;
+  initialEndDate?: string;
+  initialPeriod?:
+    | 'Semua'
+    | 'Hari Ini'
+    | 'Kemarin'
+    | '7 Hari Terakhir'
+    | '30 Hari Terakhir'
+    | 'Bulan Ini'
+    | 'Bulan Lalu'
+    | 'Tahun Ini'
+    | 'Kustom';
 }
 
 export const ExportPdfModal: React.FC<ExportPdfModalProps> = ({
   isOpen,
   onClose,
   initialReportType = 'all_summary',
+  initialStartDate,
+  initialEndDate,
+  initialPeriod,
 }) => {
   const { storeProfile, transactions, expenses, products, formatCurrency, showToast, cashierName } =
     useApp();
@@ -34,17 +49,34 @@ export const ExportPdfModal: React.FC<ExportPdfModalProps> = ({
   // Filters State
   const [period, setPeriod] = useState<
     'Semua' | 'Hari Ini' | 'Kemarin' | '7 Hari Terakhir' | '30 Hari Terakhir' | 'Bulan Ini' | 'Bulan Lalu' | 'Tahun Ini' | 'Kustom'
-  >('Bulan Ini');
+  >(() => initialPeriod || (initialStartDate && initialEndDate ? 'Kustom' : 'Bulan Ini'));
 
   const [startDate, setStartDate] = useState(() => {
+    if (initialStartDate) return initialStartDate;
     const d = new Date();
     d.setDate(1);
     return formatLocalDateToISO(d);
   });
-  const [endDate, setEndDate] = useState(() => formatLocalDateToISO(new Date()));
+  const [endDate, setEndDate] = useState(() => initialEndDate || formatLocalDateToISO(new Date()));
   const [reportType, setReportType] = useState<'all_summary' | 'cashflow' | 'profit_loss' | 'product_sales'>(
     initialReportType
   );
+
+  // Sync initial props when opened
+  useEffect(() => {
+    if (isOpen) {
+      if (initialStartDate && initialEndDate) {
+        setStartDate(initialStartDate);
+        setEndDate(initialEndDate);
+        setPeriod(initialPeriod || 'Kustom');
+      } else if (initialPeriod) {
+        setPeriod(initialPeriod);
+      }
+      if (initialReportType) {
+        setReportType(initialReportType);
+      }
+    }
+  }, [isOpen, initialStartDate, initialEndDate, initialPeriod, initialReportType]);
   const [paymentMethod, setPaymentMethod] = useState<string>('Semua');
   const [cashierFilter, setCashierFilter] = useState<string>('Semua');
   const [includeSignatures, setIncludeSignatures] = useState<boolean>(true);
