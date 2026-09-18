@@ -28,6 +28,32 @@ export async function hashPassword(password: string, salt: string = 'DelPOS_Secu
   }
 }
 
+// Deterministic synchronous hash
+export function hashPasswordSync(password: string, salt: string = 'DelPOS_Secure_Salt_2026'): string {
+  let hash = 0;
+  const str = password + salt;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(16).padStart(16, '0');
+}
+
+// Safely verify an input password against stored hash or plain password
+export async function verifyPasswordHash(inputPassword: string, storedHashOrPlain?: string): Promise<boolean> {
+  if (!inputPassword || !storedHashOrPlain) return false;
+  if (inputPassword === storedHashOrPlain) return true;
+  try {
+    const hashed = await hashPassword(inputPassword);
+    if (hashed === storedHashOrPlain) return true;
+  } catch {
+    // fallback
+  }
+  const syncHashed = hashPasswordSync(inputPassword);
+  return syncHashed === storedHashOrPlain;
+}
+
 // Generate unique tenant ID based on user credentials
 export function generateTenantId(userId: string, businessName: string): string {
   const sanitized = businessName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 15);

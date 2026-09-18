@@ -1,4 +1,5 @@
 import { Transaction, ExpenseRecord, Product, Customer, StoreProfile } from '../types';
+import { isDateInRange } from './dateUtils';
 
 export type AccountingReportType =
   | 'sales_journal' // Jurnal Penjualan Lengkap
@@ -81,15 +82,11 @@ export function generateAccountingCSV(options: ExportAccountingOptions): { csvCo
   // Filter transactions and expenses by date if specified
   const filteredTrx = transactions.filter((t) => {
     if (t.status === 'Dibatalkan') return false;
-    if (startDate && t.date < startDate) return false;
-    if (endDate && t.date > endDate) return false;
-    return true;
+    return isDateInRange(t.date, t.timestamp, startDate, endDate);
   });
 
   const filteredExpenses = expenses.filter((e) => {
-    if (startDate && e.date < startDate) return false;
-    if (endDate && e.date > endDate) return false;
-    return true;
+    return isDateInRange(e.date, e.timestamp, startDate, endDate);
   });
 
   const rows: string[] = [];

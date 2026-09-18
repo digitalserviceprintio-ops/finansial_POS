@@ -39,6 +39,7 @@ export interface AuthUser {
   isEmailVerified: boolean;
   avatarUrl?: string;
   password?: string;
+  passwordHash?: string;
   pinCode?: string;
   createdAt: string;
   lastLoginAt: string;

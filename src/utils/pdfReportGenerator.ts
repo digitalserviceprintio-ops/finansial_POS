@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Transaction, ExpenseRecord, Product, StoreProfile } from '../types';
+import { isDateInRange } from './dateUtils';
 
 export interface PdfReportFilterOptions {
   periodLabel: string;
@@ -19,7 +20,8 @@ export function generateFinancialPdfReport(
   transactions: Transaction[],
   expenses: ExpenseRecord[],
   products: Product[],
-  options: PdfReportFilterOptions
+  options: PdfReportFilterOptions,
+  action: 'download' | 'print' = 'download'
 ) {
   const doc = new jsPDF({
     orientation: options.orientation || 'portrait',
@@ -36,19 +38,16 @@ export function generateFinancialPdfReport(
     return 'Rp ' + Math.round(num).toLocaleString('id-ID');
   };
 
-  // Filter Transactions
-  let filteredTrx = transactions.filter((t) => t.status === 'Selesai');
+  // Filter Transactions (include Selesai and valid transactions)
+  let filteredTrx = transactions.filter((t) => t.status === 'Selesai' || !t.status);
   if (options.paymentMethod && options.paymentMethod !== 'Semua') {
     filteredTrx = filteredTrx.filter((t) => t.paymentMethod === options.paymentMethod);
   }
   if (options.cashierFilter && options.cashierFilter !== 'Semua') {
     filteredTrx = filteredTrx.filter((t) => t.cashierName === options.cashierFilter);
   }
-  if (options.startDate) {
-    filteredTrx = filteredTrx.filter((t) => t.date >= options.startDate!);
-  }
-  if (options.endDate) {
-    filteredTrx = filteredTrx.filter((t) => t.date <= options.endDate!);
+  if (options.startDate || options.endDate) {
+    filteredTrx = filteredTrx.filter((t) => isDateInRange(t.date, t.timestamp, options.startDate, options.endDate));
   }
 
   // Filter Expenses
@@ -56,11 +55,8 @@ export function generateFinancialPdfReport(
   if (options.categoryFilter && options.categoryFilter !== 'Semua') {
     filteredExp = filteredExp.filter((e) => e.category === options.categoryFilter);
   }
-  if (options.startDate) {
-    filteredExp = filteredExp.filter((e) => e.date >= options.startDate!);
-  }
-  if (options.endDate) {
-    filteredExp = filteredExp.filter((e) => e.date <= options.endDate!);
+  if (options.startDate || options.endDate) {
+    filteredExp = filteredExp.filter((e) => isDateInRange(e.date, e.timestamp, options.startDate, options.endDate));
   }
 
   // Aggregate Metrics
@@ -329,22 +325,94 @@ export function generateFinancialPdfReport(
     doc.text('III. Ranking & Kinerja Penjualan Produk Teratas', margin, currentY);
     currentY += 3;
 
-    const sortedProducts = [...products]
-      .sort((a, b) => (b.soldCount || 0) * b.sellingPrice - (a.soldCount || 0) * a.sellingPrice)
-      .slice(0, 15);
+    // Aggregate actual product sales from filtered transactions in this period
+    const periodProductMap: Record<
+      string,
+      { name: string; category: string; price: number; qty: number; total: number; hpp: number }
+    > = {};
+
+    filteredTrx.forEach((trx) => {
+      trx.items?.forEach((item: any) => {
+        const prod = products.find((p) => p.id === item.productId);
+        const pName =
+          item.productName ||
+          item.name ||
+          (item.product && item.product.name) ||
+          prod?.name ||
+          'Produk Tanpa Nama';
+        const pKey = item.productId || pName;
+
+        if (!periodProductMap[pKey]) {
+          const buyPrice = prod ? prod.purchasePrice : (item.price || 0) * 0.6;
+          periodProductMap[pKey] = {
+            name: pName,
+            category: prod?.category || item.category || 'Umum',
+            price: item.price || prod?.sellingPrice || 0,
+            qty: 0,
+            total: 0,
+            hpp: buyPrice,
+          };
+        }
+        const itemQty = Number(item.quantity) || 1;
+        const itemPrice = Number(item.price) || prod?.sellingPrice || 0;
+        periodProductMap[pKey].qty += itemQty;
+        periodProductMap[pKey].total += itemPrice * itemQty;
+      });
+    });
+
+    // Fallback to general product catalog if no transactions found in period
+    let sortedProducts: {
+      name: string;
+      category: string;
+      sellingPrice: number;
+      soldCount: number;
+      omzet: number;
+      profitContribution: number;
+    }[] = [];
+
+    const periodProductList = Object.values(periodProductMap);
+    if (periodProductList.length > 0) {
+      sortedProducts = periodProductList
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 15)
+        .map((p) => {
+          const marginItem = p.price - p.hpp;
+          return {
+            name: p.name,
+            category: p.category,
+            sellingPrice: p.price,
+            soldCount: p.qty,
+            omzet: p.total,
+            profitContribution: p.qty * marginItem,
+          };
+        });
+    } else {
+      sortedProducts = [...products]
+        .sort((a, b) => (b.soldCount || 0) * b.sellingPrice - (a.soldCount || 0) * a.sellingPrice)
+        .slice(0, 15)
+        .map((p) => {
+          const omzet = (p.soldCount || 0) * p.sellingPrice;
+          const marginItem = p.sellingPrice - p.purchasePrice;
+          return {
+            name: p.name || 'Produk',
+            category: p.category || 'Umum',
+            sellingPrice: p.sellingPrice,
+            soldCount: p.soldCount || 0,
+            omzet,
+            profitContribution: (p.soldCount || 0) * marginItem,
+          };
+        });
+    }
 
     const prodRows = sortedProducts.map((p, idx) => {
-      const omzet = (p.soldCount || 0) * p.sellingPrice;
-      const marginItem = p.sellingPrice - p.purchasePrice;
-      const profitContribution = (p.soldCount || 0) * marginItem;
       return [
         `#${idx + 1}`,
-        p.name,
-        p.category,
+        p.name || 'Produk',
+        p.category || 'Umum',
         fmt(p.sellingPrice),
-        `${p.soldCount || 0} unit`,
-        fmt(omzet),
-        fmt(profitContribution),
+        `${p.soldCount} unit`,
+        fmt(p.omzet),
+        fmt(p.profitContribution),
       ];
     });
 
@@ -429,10 +497,21 @@ export function generateFinancialPdfReport(
     );
   }
 
-  // Save / Download PDF
+  // Save / Download or Print PDF
   const sanitizedStoreName = storeProfile.name.replace(/[^a-zA-Z0-9]/g, '_');
   const fileName = `Laporan_Keuangan_${sanitizedStoreName}_${options.periodLabel.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(fileName);
+
+  if (action === 'print') {
+    doc.autoPrint();
+    const blobUrl = doc.output('bloburl');
+    const printWin = window.open(blobUrl, '_blank');
+    if (!printWin) {
+      // Fallback if browser blocks popups
+      doc.save(fileName);
+    }
+  } else {
+    doc.save(fileName);
+  }
 
   return fileName;
 }

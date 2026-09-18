@@ -4,6 +4,25 @@ const MASTER_REGISTRY_KEY = 'fpro_master_license_registry';
 const ACTIVE_TENANT_LICENSE_KEY_PREFIX = 'fpro_license_';
 const TIER_PRICING_STORAGE_KEY = 'fpro_tier_pricing_catalog';
 
+// Universal Lifetime Master License Key (Satu Kode Lisensi Seumur Hidup untuk Semua Akun)
+export const UNIVERSAL_LIFETIME_LICENSE_KEY = 'DELPOS-LIFETIME';
+
+export const UNIVERSAL_LIFETIME_ALIASES = [
+  'DELPOS-LIFETIME',
+  'DELPOS-LIFETIME-ALL',
+  'FPRO-LIFETIME',
+  'FPRO-LIFETIME-ALL',
+  'FPRO-LIFETIME-ENTERPRISE',
+  'DELPOS-LIFETIME-ENTERPRISE',
+  'MICRODATA-LIFETIME',
+];
+
+export const isUniversalLifetimeKey = (key: string): boolean => {
+  if (!key) return false;
+  const clean = key.trim().toUpperCase();
+  return UNIVERSAL_LIFETIME_ALIASES.includes(clean);
+};
+
 export const DEFAULT_TIER_PRICES: Record<LicenseTier, number> = {
   TRIAL: 0,
   STARTER: 350000,
@@ -47,8 +66,30 @@ export const TIER_FEATURES: Record<LicenseTier, LicenseFeatureSet> = {
   },
 };
 
+// Pre-seeded Universal Master Lifetime License (Bisa dipakai di semua akun toko)
+export const UNIVERSAL_MASTER_LICENSE_ITEM: AppLicense = {
+  id: 'LIC-LFT-UNIVERSAL',
+  licenseKey: UNIVERSAL_LIFETIME_LICENSE_KEY,
+  tenantId: '',
+  businessName: 'Semua Akun UMKM (Lisensi Universal Selamanya)',
+  clientName: 'Seluruh Mitra & Pengguna Toko',
+  clientEmail: 'support@delpos.id',
+  clientPhone: '081234567890',
+  tier: 'ENTERPRISE',
+  status: 'ACTIVE',
+  issuedAt: Date.now() - 365 * 24 * 60 * 60 * 1000,
+  activatedAt: Date.now() - 365 * 24 * 60 * 60 * 1000,
+  expiresAt: null, // Lifetime / Selamanya
+  maxCashiers: 999,
+  maxProducts: 99999,
+  features: TIER_FEATURES.ENTERPRISE,
+  price: 0,
+  notes: 'KODE LISENSI RESMI LIFETIME / SELAMANYA: 1 Kode Universal untuk Semua Akun Toko',
+};
+
 // Initial Pre-seeded Master Licenses for Demonstration & Testing
 const INITIAL_MASTER_LICENSES: AppLicense[] = [
+  UNIVERSAL_MASTER_LICENSE_ITEM,
   {
     id: 'LIC-ENT-001',
     licenseKey: 'FPRO-ENT-9824-7125-E8A1',
@@ -140,17 +181,37 @@ function generateChecksum(prefix: string, part1: string, part2: string): string 
 }
 
 export const LicenseManager = {
+  // Get canonical universal lifetime license key
+  getUniversalLifetimeKey(): string {
+    return UNIVERSAL_LIFETIME_LICENSE_KEY;
+  },
+
+  // Check if a string is a universal lifetime license key
+  isUniversalLifetimeKey(key: string): boolean {
+    return isUniversalLifetimeKey(key);
+  },
+
   // Get all master licenses (Super Admin view)
   getAllMasterLicenses(): AppLicense[] {
     try {
       const raw = localStorage.getItem(MASTER_REGISTRY_KEY);
+      let list: AppLicense[] = [];
       if (!raw) {
-        localStorage.setItem(MASTER_REGISTRY_KEY, JSON.stringify(INITIAL_MASTER_LICENSES));
-        return INITIAL_MASTER_LICENSES;
+        list = [...INITIAL_MASTER_LICENSES];
+        localStorage.setItem(MASTER_REGISTRY_KEY, JSON.stringify(list));
+        return list;
       }
-      return JSON.parse(raw) as AppLicense[];
+      list = JSON.parse(raw) as AppLicense[];
+
+      // Ensure Universal Master Lifetime License is always present at index 0
+      const hasUniversal = list.some((l) => isUniversalLifetimeKey(l.licenseKey));
+      if (!hasUniversal) {
+        list.unshift(UNIVERSAL_MASTER_LICENSE_ITEM);
+        localStorage.setItem(MASTER_REGISTRY_KEY, JSON.stringify(list));
+      }
+      return list;
     } catch {
-      return INITIAL_MASTER_LICENSES;
+      return [...INITIAL_MASTER_LICENSES];
     }
   },
 
@@ -269,8 +330,51 @@ export const LicenseManager = {
   // Activate license using Serial Key for a tenant
   activateLicense(tenantId: string, serialKey: string, tenantBusinessName?: string): { success: boolean; message: string; license?: AppLicense } {
     const cleanKey = serialKey.trim().toUpperCase();
-    if (!cleanKey.startsWith('FPRO-')) {
-      return { success: false, message: 'Format nomor lisensi tidak valid! Harus diawali dengan "FPRO-"' };
+
+    // 1. Check if Universal Lifetime Master Key (Bisa dipakai di semua akun)
+    if (isUniversalLifetimeKey(cleanKey)) {
+      const lifetimeLic: AppLicense = {
+        id: `LIC-LFT-${tenantId.slice(-8)}`,
+        licenseKey: UNIVERSAL_LIFETIME_LICENSE_KEY,
+        tenantId,
+        businessName: tenantBusinessName || 'Bisnis Mitra DelPOS',
+        clientName: 'Pemilik Toko',
+        clientEmail: '',
+        clientPhone: '',
+        tier: 'ENTERPRISE',
+        status: 'ACTIVE',
+        issuedAt: Date.now(),
+        activatedAt: Date.now(),
+        expiresAt: null, // Lifetime / Seumur Hidup
+        maxCashiers: 999,
+        maxProducts: 99999,
+        features: TIER_FEATURES.ENTERPRISE,
+        price: 0,
+        notes: 'Lisensi Resmi Seumur Hidup (Lifetime) - Universal Semua Akun',
+      };
+
+      // Save locally for this tenant
+      localStorage.setItem(`${ACTIVE_TENANT_LICENSE_KEY_PREFIX}${tenantId}`, JSON.stringify(lifetimeLic));
+
+      // Register or update this tenant's activation in Master Licenses fleet
+      const masterList = this.getAllMasterLicenses();
+      const existingIdx = masterList.findIndex((l) => l.tenantId === tenantId);
+      if (existingIdx >= 0) {
+        masterList[existingIdx] = lifetimeLic;
+      } else {
+        masterList.push(lifetimeLic);
+      }
+      this.saveAllMasterLicenses(masterList);
+
+      return {
+        success: true,
+        message: `Selamat! Lisensi Seumur Hidup (Lifetime) berhasil diaktifkan. Akun ${tenantBusinessName || 'Anda'} kini aktif permanen dengan fitur Enterprise lengkap.`,
+        license: lifetimeLic,
+      };
+    }
+
+    if (!cleanKey.startsWith('FPRO-') && !cleanKey.startsWith('DELPOS-')) {
+      return { success: false, message: 'Format nomor lisensi tidak valid! Silakan periksa kembali serial yang Anda masukkan.' };
     }
 
     const masterList = this.getAllMasterLicenses();

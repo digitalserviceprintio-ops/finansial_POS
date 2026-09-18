@@ -52,7 +52,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AppLicense, LicenseTier, LicenseStatus, AuditLogEntry, AuditLogCategory } from '../types';
-import { LicenseManager, TIER_FEATURES, DEFAULT_TIER_PRICES } from '../utils/licenseManager';
+import { LicenseManager, TIER_FEATURES, DEFAULT_TIER_PRICES, UNIVERSAL_LIFETIME_LICENSE_KEY } from '../utils/licenseManager';
 import { SecureVault, MasterTenantBackupItem, MasterBackupPackage } from '../utils/security';
 import { AuditLogger } from '../utils/auditLogger';
 
@@ -1080,6 +1080,52 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onExitSuperAdmin
                 >
                   <RefreshCw className="h-4 w-4" />
                 </button>
+              </div>
+            </div>
+
+            {/* Master Universal Lifetime License Card */}
+            <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-emerald-500/10 p-4 sm:p-5 rounded-2xl border-2 border-amber-400/50 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-slate-950 font-black shadow-xs">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-black text-slate-900 tracking-tight">
+                      KODE MASTER LISENSI SEUMUR HIDUP (UNIVERSAL LIFETIME)
+                    </h3>
+                    <span className="bg-amber-400 text-slate-950 text-[10px] font-black uppercase px-2 py-0.5 rounded-full shadow-xs">
+                      1 Kode Untuk Semua Akun
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                    Satu kode lisensi permanen ini dapat dibagikan dan diaktivasi oleh <strong>seluruh akun toko / mitra DelPOS</strong> tanpa batasan. Otomatis mengaktifkan paket Enterprise Seumur Hidup (Unlimited Kasir & Produk).
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-bold text-slate-500">Kode Lisensi:</span>
+                    <span className="font-mono text-xs font-black text-indigo-900 bg-white border border-indigo-200 px-3 py-1 rounded-lg select-all shadow-xs tracking-wider">
+                      {UNIVERSAL_LIFETIME_LICENSE_KEY}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(UNIVERSAL_LIFETIME_LICENSE_KEY, 'Kode Master Lifetime')}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Copy className="h-3.5 w-3.5 text-indigo-600" />
+                      <span>Salin Kode</span>
+                    </button>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `Halo Mitra DelPOS UMKM,\n\nBerikut adalah Kode Lisensi Resmi Seumur Hidup (Lifetime) untuk toko Anda:\n\n*${UNIVERSAL_LIFETIME_LICENSE_KEY}*\n\nKode ini dapat diaktifkan langsung melalui menu Pengaturan Toko > Lisensi untuk menikmati seluruh fitur Enterprise tanpa batas waktu. Terima kasih.`
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Phone className="h-3.5 w-3.5" />
+                      <span>Bagikan via WhatsApp</span>
+                    </a>
+                  </div>
+                </div>
               </div>
             </div>
 

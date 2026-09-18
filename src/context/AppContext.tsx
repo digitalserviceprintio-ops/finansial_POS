@@ -31,7 +31,7 @@ import {
   initialCategories,
   initialCustomerOrders,
 } from '../data/mockData';
-import { SecureVault, generateTenantId, validatePassword, validateEmailAddress } from '../utils/security';
+import { SecureVault, generateTenantId, validatePassword, validateEmailAddress, hashPassword, hashPasswordSync, verifyPasswordHash } from '../utils/security';
 import { LicenseManager } from '../utils/licenseManager';
 import { sendPayloadToGoogleAppsScript } from '../utils/googleAppsScript';
 import {
@@ -160,7 +160,6 @@ interface AppContextType {
     userEmail?: string;
   }>;
   currentDeviceInfo: CurrentDeviceInfo;
-  loginAsDemoUser: (userType: 'owner' | 'cashier' | 'budi' | 'siti') => Promise<void>;
   logoutUser: () => Promise<void>;
 
   // Auto-Lock & Session Security
@@ -310,8 +309,6 @@ const initialAuthUsers: AuthUser[] = [
     businessName: 'Kopi & Resto Nusantara',
     role: 'owner',
     isEmailVerified: true,
-    password: 'admin123',
-    pinCode: '123456',
     avatarUrl:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_UeVtMqix0sJCZHs2TtKM5-d72Pea84EAktZj50a8963OhMvLReqs1NHQ5_GHU31yQIOvnrJgSfVJ_GeiKlPatJEFijCOybVvFFiMGK5NOxgk9QrAVW_iXOt0iW_JoPaZYQPCnyP7yXiRGmSsKfKm7wGSICkKlm5wlq8E4GuzgUAsgAUa1swPQ-m8CDYgnJ9jjXFUt_9CTSEQH_yEVGaOFNO6eA39ylX7lz2CTC7oAh5YPsc0Mc',
     createdAt: new Date().toISOString(),
@@ -325,8 +322,6 @@ const initialAuthUsers: AuthUser[] = [
     businessName: 'Kopi & Resto Nusantara',
     role: 'cashier',
     isEmailVerified: true,
-    password: 'kasir123',
-    pinCode: '123456',
     avatarUrl:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCoLtV3Bv2OBXPlq_WrGjzOKb2hx7Pr3DOTjypa8dkEKduOjjWvN91FeXpeuVJDGRacnpFhqLouF2glsjyg154-ONwKg9-AXq2ylnHCQIAwb0pQ9662t3tt1reJkfrz46PuKvm9rTpygmqRrJUs0iC2FvO13DZ8nlMx-0eSm-8yba6zLFIndlcCVnmVfynCOWQHJRodfFxaOXcZ1AmWZ9mFAugAFABkMmuQ6rlyglKy280HkFHaQKc',
     createdAt: new Date().toISOString(),
@@ -899,7 +894,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: email.toLowerCase(),
           phone,
           role: 'owner' as const,
-          password: password || 'admin123',
+          password: password || '',
         },
       },
     };
@@ -1017,7 +1012,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: email ? email.toLowerCase() : `user.${cleanPhone}@delpos.local`,
       phone: cleanPhone,
       role: 'owner' as const,
-      password: password || 'admin123',
+      password: password || '',
     };
 
     const newPending = {
@@ -1081,7 +1076,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: email?.toLowerCase() || `user.${cleanPhone}@delpos.local`,
       phone: cleanPhone,
       role: 'owner' as const,
-      password: 'admin123',
+      password: '',
     };
 
     setPendingVerifications((prev) => ({
@@ -1154,6 +1149,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Create & register user
     const newUserId = `USR-${String(registeredUsers.length + 1).padStart(3, '0')}`;
+    const userPass = pending.userData.password?.trim() || '';
+    const userPassHash = userPass ? hashPasswordSync(userPass) : undefined;
     const newUser: AuthUser = {
       id: newUserId,
       fullName: pending.userData.fullName || 'Pemilik Usaha',
@@ -1164,8 +1161,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isEmailVerified: true,
       avatarUrl:
         'https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_UeVtMqix0sJCZHs2TtKM5-d72Pea84EAktZj50a8963OhMvLReqs1NHQ5_GHU31yQIOvnrJgSfVJ_GeiKlPatJEFijCOybVvFFiMGK5NOxgk9QrAVW_iXOt0iW_JoPaZYQPCnyP7yXiRGmSsKfKm7wGSICkKlm5wlq8E4GuzgUAsgAUa1swPQ-m8CDYgnJ9jjXFUt_9CTSEQH_yEVGaOFNO6eA39ylX7lz2CTC7oAh5YPsc0Mc',
-      password: pending.userData.password || 'admin123',
-      pinCode: '123456',
+      password: userPass,
+      passwordHash: userPassHash,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
       activeSession: newSession,
@@ -1495,6 +1492,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newUserId = `USR-${String(registeredUsers.length + 1).padStart(3, '0')}`;
 
     // Akun baru dibuat dengan isEmailVerified: false (harus konfirmasi email sebelum buka POS)
+    const rawPass = params.password?.trim() || '';
+    const passHash = rawPass ? await hashPassword(rawPass) : undefined;
     const newUser: AuthUser = {
       id: newUserId,
       fullName: params.fullName.trim(),
@@ -1505,8 +1504,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isEmailVerified: false,
       avatarUrl:
         'https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_UeVtMqix0sJCZHs2TtKM5-d72Pea84EAktZj50a8963OhMvLReqs1NHQ5_GHU31yQIOvnrJgSfVJ_GeiKlPatJEFijCOybVvFFiMGK5NOxgk9QrAVW_iXOt0iW_JoPaZYQPCnyP7yXiRGmSsKfKm7wGSICkKlm5wlq8E4GuzgUAsgAUa1swPQ-m8CDYgnJ9jjXFUt_9CTSEQH_yEVGaOFNO6eA39ylX7lz2CTC7oAh5YPsc0Mc',
-      password: params.password || 'admin123',
-      pinCode: '123456',
+      password: rawPass,
+      passwordHash: passHash,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
       activeSession: newSession,
@@ -1775,12 +1774,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    // 2. Validate Password / PIN if provided
-    if (targetUser.password && passwordOrPin) {
+    // 2. Validate Password / PIN if set on the account
+    const hasCredential = Boolean(targetUser.password || targetUser.passwordHash || targetUser.pinCode);
+    if (hasCredential) {
+      if (!passwordOrPin) {
+        return {
+          success: false,
+          message: 'Kata sandi atau PIN akun wajib dimasukkan.',
+        };
+      }
       const trimmed = passwordOrPin.trim();
-      const isPassValid = targetUser.password === trimmed;
-      const isPinValid = targetUser.pinCode === trimmed;
-      if (!isPassValid && !isPinValid) {
+      const isPassValid = targetUser.password ? targetUser.password === trimmed : false;
+      const isHashValid = targetUser.passwordHash ? await verifyPasswordHash(trimmed, targetUser.passwordHash) : false;
+      const isPinValid = targetUser.pinCode ? targetUser.pinCode === trimmed : false;
+      if (!isPassValid && !isHashValid && !isPinValid) {
         return {
           success: false,
           message: 'Kata sandi atau PIN salah. Silakan periksa kembali.',
@@ -1871,25 +1878,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const loginAsDemoUser = async (userType: 'owner' | 'cashier' | 'budi' | 'siti') => {
-    try {
-      localStorage.removeItem('finansialpro_logged_out');
-    } catch {
-      // ignore
-    }
-    const target =
-      userType === 'owner' || userType === 'budi'
-        ? initialAuthUsers[0]
-        : initialAuthUsers[1];
-
-    const res = await loginWithCredentials(target.email, target.password || 'admin123', true);
-    if (res.success) {
-      showToast(`Masuk sebagai ${target.fullName} (${target.role === 'owner' ? 'Pemilik' : 'Kasir'})`, 'success');
-    } else {
-      showToast(res.message, 'warning');
-    }
-  };
-
   const logoutUser = async () => {
     const userEmail = currentUser?.email;
 
@@ -1933,18 +1921,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'Password akun login tidak boleh kosong.' };
     }
 
-    // Ambil password akun yang sedang aktif
-    const currentPass =
-      currentUser?.password ||
-      registeredUsers.find(
-        (u) =>
-          u.id === currentUser?.id ||
-          (currentUser?.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-          (currentUser?.phone && u.phone === currentUser.phone)
-      )?.password;
+    const checkMatch = (u?: AuthUser | null): boolean => {
+      if (!u) return false;
+      if (u.password && u.password === input) return true;
+      if (u.pinCode && u.pinCode === input) return true;
+      return false;
+    };
 
-    // 1. Cek apakah cocok dengan password akun kasir/admin yang sedang aktif
-    if (currentPass && currentPass === input) {
+    // 1. Cek apakah cocok dengan password/PIN akun kasir/admin yang sedang aktif
+    if (checkMatch(currentUser)) {
       setIsAppLocked(false);
       setLastActiveTimestamp(Date.now());
       return {
@@ -1954,9 +1939,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 2. Cek apakah cocok dengan password akun kasir atau admin terdaftar lainnya di sistem
-    const matchedUser = registeredUsers.find(
-      (u) => u.password && u.password === input
-    );
+    const matchedUser = registeredUsers.find((u) => checkMatch(u));
 
     if (matchedUser) {
       setIsAppLocked(false);
@@ -1966,6 +1949,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: `Kunci POS berhasil dibuka dengan otentikasi ${matchedUser.fullName} (${
           matchedUser.role === 'owner' ? 'Pemilik / Admin' : 'Kasir'
         })!`,
+      };
+    }
+
+    // 3. Jika belum pernah disetel password pada akun
+    const hasAnySecurity = Boolean(
+      currentUser?.password ||
+      currentUser?.passwordHash ||
+      currentUser?.pinCode ||
+      registeredUsers.some((u) => u.password || u.passwordHash || u.pinCode)
+    );
+
+    if (!hasAnySecurity) {
+      setIsAppLocked(false);
+      setLastActiveTimestamp(Date.now());
+      return {
+        success: true,
+        message: 'Kunci POS dibuka. Silakan atur kata sandi akun di Pengaturan untuk proteksi maksimal.',
       };
     }
 
@@ -2973,7 +2973,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sendPasswordResetLink,
         resetUserPassword,
         loginWithCredentials,
-        loginAsDemoUser,
         logoutUser,
         isEmailModalOpen,
         setIsEmailModalOpen,

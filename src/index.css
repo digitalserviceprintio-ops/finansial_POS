@@ -12,3 +12,28 @@
   }
 }
 
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-pdf-document,
+  #printable-pdf-document * {
+    visibility: visible;
+  }
+  #printable-pdf-document {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    min-height: 100vh;
+    margin: 0;
+    padding: 24px;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+    z-index: 999999;
+  }
+}
+
+

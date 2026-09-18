@@ -631,24 +631,12 @@ export const SettingsView: React.FC = () => {
         {/* License Details Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-white/10 text-xs">
           <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-gray-400">Nomor Serial Aktif:</span>
-            <div className="flex items-center justify-between">
-              <span className="font-mono font-black text-amber-300 break-all select-all">
-                {currentLicense.licenseKey}
+            <span className="text-[10px] uppercase font-bold text-gray-400">Status Lisensi:</span>
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span className="font-bold text-emerald-300 text-xs">
+                {currentLicense.status === 'ACTIVE' ? 'Terverifikasi Resmi' : currentLicense.status}
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(currentLicense.licenseKey);
-                  setCopiedKey(true);
-                  showToast('Serial lisensi disalin!', 'info');
-                  setTimeout(() => setCopiedKey(false), 2000);
-                }}
-                className="p-1 rounded-lg hover:bg-white/10 text-gray-300"
-                title="Salin Serial"
-              >
-                {copiedKey ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-              </button>
             </div>
           </div>
 
@@ -745,7 +733,7 @@ export const SettingsView: React.FC = () => {
 
                 <a
                   href={`https://wa.me/?text=${encodeURIComponent(
-                    `Halo Tim Super Admin DelPOS UMKM,\n\nSaya ingin memesan lisensi *${pkg.name}* seharga *${formatCurrency(pkg.price)}* untuk toko *${currentLicense.businessName || storeProfile.name}* (Serial: ${currentLicense.licenseKey}).\n\nMohon petunjuk pembayaran & penerbitan lisensi resmi. Terima kasih.`
+                    `Halo Tim Super Admin DelPOS UMKM,\n\nSaya ingin memesan lisensi *${pkg.name}* seharga *${formatCurrency(pkg.price)}* untuk toko *${currentLicense.businessName || storeProfile.name}*.\n\nMohon petunjuk pembayaran & penerbitan lisensi resmi. Terima kasih.`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
@@ -772,7 +760,7 @@ export const SettingsView: React.FC = () => {
           <form onSubmit={handleActivateLicense} className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
-              placeholder="Contoh: FPRO-PRO-XXXX-XXXX-XXXX"
+              placeholder="Masukkan nomor serial lisensi resmi..."
               value={activationKeyInput}
               onChange={(e) => setActivationKeyInput(e.target.value.toUpperCase())}
               className="flex-1 rounded-xl border border-white/20 bg-black/40 px-3.5 py-2.5 text-xs font-mono font-bold text-amber-300 placeholder-gray-500 focus:border-amber-400 focus:outline-hidden"
@@ -780,7 +768,7 @@ export const SettingsView: React.FC = () => {
             <button
               type="submit"
               disabled={isActivating}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-5 py-2.5 text-xs font-extrabold text-slate-950 shadow-sm transition-all disabled:opacity-50 shrink-0"
+              className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-5 py-2.5 text-xs font-extrabold text-slate-950 shadow-sm transition-all disabled:opacity-50 shrink-0 cursor-pointer"
             >
               {isActivating ? 'Memverifikasi...' : 'Aktivasi Lisensi'}
             </button>
@@ -1289,7 +1277,7 @@ export const SettingsView: React.FC = () => {
                 <span>Otentikasi Pembukaan Kunci</span>
               </div>
               <p className="text-[11px] leading-relaxed text-amber-900">
-                Saat layar terkunci, kasir atau admin harus memasukkan <strong>Password Akun</strong> atau <strong>PIN Kasir (Bawaan: 123456)</strong> untuk melanjutkan transaksi POS.
+                Saat layar terkunci, kasir atau admin harus memasukkan <strong>Password Akun</strong> atau <strong>PIN Kasir</strong> terdaftar untuk melanjutkan transaksi POS.
               </p>
             </div>
           </div>

@@ -16,9 +16,18 @@ import { LicenseManager } from '../utils/licenseManager';
 import { LicenseTier } from '../types';
 
 export const LicenseExpirationAlert: React.FC = () => {
-  const { currentLicense, setCurrentTab, formatCurrency } = useApp();
+  const { currentLicense, setCurrentTab, formatCurrency, activateLicenseKey } = useApp();
   const [isDismissed, setIsDismissed] = useState(false);
   const [tierPricing, setTierPricing] = useState(() => LicenseManager.getTierPricing());
+  const [isActivatingLifetime, setIsActivatingLifetime] = useState(false);
+
+  const handleQuickActivateLifetime = () => {
+    setIsActivatingLifetime(true);
+    setTimeout(() => {
+      activateLicenseKey(LicenseManager.getUniversalLifetimeKey());
+      setIsActivatingLifetime(false);
+    }, 400);
+  };
 
   // Automatically listen to and synchronize pricing configured in Super Admin dashboard
   useEffect(() => {
@@ -131,9 +140,8 @@ export const LicenseExpirationAlert: React.FC = () => {
       `Saya ingin memperpanjang/mengaktifkan lisensi toko ke *Paket ${pkgName}* seharga *${formatCurrency(pkgPrice)}*.\n\n` +
       `Informasi Toko:\n` +
       `- Nama Usaha: ${currentLicense.businessName || 'Toko UMKM'}\n` +
-      `- Serial Saat Ini: ${currentLicense.licenseKey}\n` +
       `- Status: ${isExpired ? 'Masa Trial Telah Habis' : 'Masa Trial H-1 (Berakhir Besok)'}\n\n` +
-      `Mohon dibantu nomor rekening pembayaran dan penerbitan kunci serial resmi. Terima kasih.`;
+      `Mohon dibantu nomor rekening pembayaran dan penerbitan lisensi resmi. Terima kasih.`;
     return `https://wa.me/?text=${encodeURIComponent(text)}`;
   };
 
@@ -173,6 +181,35 @@ export const LicenseExpirationAlert: React.FC = () => {
                 <ArrowRight className="h-3 w-3" />
               </button>
             </div>
+          </div>
+
+          {/* Universal Lifetime Quick Activation Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-black/30 border border-white/20">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-400 text-slate-950 font-black">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-black text-white">
+                    Aktivasi Otomatis Lisensi Seumur Hidup (Lifetime)
+                  </p>
+                  <span className="text-[10px] bg-amber-400/20 text-amber-200 px-1.5 py-0.5 rounded-sm font-semibold border border-amber-300/30">
+                    Enterprise
+                  </span>
+                </div>
+                <p className="text-[11px] text-rose-200">
+                  Aktifkan lisensi permanen toko Anda sekarang untuk menikmati seluruh fitur tanpa batas waktu.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleQuickActivateLifetime}
+              disabled={isActivatingLifetime}
+              className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 text-xs font-black shadow-md transition-all shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              {isActivatingLifetime ? 'Mengaktifkan...' : 'Aktivasi Lifetime Sekarang'}
+            </button>
           </div>
 
           {/* Integrated License Products Pricing Grid (Katalog Super Admin) */}
@@ -280,6 +317,35 @@ export const LicenseExpirationAlert: React.FC = () => {
               <X className="h-4 w-4" />
             </button>
           </div>
+        </div>
+
+        {/* Universal Lifetime Quick Activation Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-black/20 border border-black/10">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950 text-amber-300 font-black">
+              <Sparkles className="h-4 w-4 text-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-black text-slate-950">
+                  Aktivasi Otomatis Lisensi Seumur Hidup (Lifetime)
+                </p>
+                <span className="text-[10px] bg-slate-950 text-amber-300 px-1.5 py-0.5 rounded-sm font-bold">
+                  Enterprise
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-950">
+                Aktifkan lisensi Seumur Hidup untuk toko Anda tanpa batasan waktu.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleQuickActivateLifetime}
+            disabled={isActivatingLifetime}
+            className="px-3.5 py-2 rounded-lg bg-slate-950 hover:bg-slate-900 text-amber-300 text-xs font-black shadow-md transition-all shrink-0 cursor-pointer disabled:opacity-50"
+          >
+            {isActivatingLifetime ? 'Mengaktifkan...' : 'Aktivasi Lifetime Sekarang'}
+          </button>
         </div>
 
         {/* Integrated License Products Pricing Grid (Katalog Super Admin) */}
